@@ -1,7 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from "react-native";
 
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { Colors } from "@/constants/Colors";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 interface IntroPaginationProps {
   total: number;
@@ -10,9 +10,9 @@ interface IntroPaginationProps {
 
 export function IntroPagination({ total, current }: IntroPaginationProps) {
   const colorScheme = useColorScheme();
-  const activeColor = Colors[colorScheme ?? 'light'].tint;
-  const inactiveColor = Colors[colorScheme ?? 'light'].tabIconDefault;
-
+  // Using a dark color for the active dot
+  const activeColor = "#333333"; // Dark gray color
+  const inactiveColor = Colors[colorScheme ?? "light"].tabIconDefault;
   return (
     <View style={styles.container}>
       {Array.from({ length: total }).map((_, index) => (
@@ -33,9 +33,9 @@ export function IntroPagination({ total, current }: IntroPaginationProps) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     height: 8,
     marginBottom: 32,
@@ -43,6 +43,6 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
 });

@@ -1,8 +1,5 @@
 import { Image } from "expo-image";
-import { StyleSheet, useWindowDimensions } from "react-native";
-
-import { ThemedText } from "../ThemedText";
-import { ThemedView } from "../ThemedView";
+import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 interface IntroSlideProps {
   title: string;
@@ -14,15 +11,13 @@ export function IntroSlide({ title, description, image }: IntroSlideProps) {
   const { width } = useWindowDimensions();
 
   return (
-    <ThemedView style={[styles.slide, { width }]}>
+    <View style={[styles.slide, { width }]}>
       <Image source={image} style={styles.image} contentFit="contain" />
-      <ThemedView style={styles.content}>
-        <ThemedText type="title" style={styles.title}>
-          {title}
-        </ThemedText>
-        <ThemedText style={styles.description}>{description}</ThemedText>
-      </ThemedView>
-    </ThemedView>
+      <View style={styles.content}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.description}>{description}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -32,23 +27,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
+    backgroundColor: "white",
   },
   image: {
     width: 350,
     height: 350,
-    marginBottom: 50,
+    marginBottom: 60,
   },
   content: {
     alignItems: "center",
-    gap: 12,
+    gap: 22,
   },
   title: {
     fontSize: 24,
     textAlign: "center",
+    marginBottom: 6,
+    fontWeight: "400",
   },
   description: {
     textAlign: "center",
     fontSize: 16,
     paddingHorizontal: 20,
+    marginBottom: 80,
   },
 });

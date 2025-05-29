@@ -1,13 +1,18 @@
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { router } from "expo-router";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function DividerScreen() {
   const colorScheme = useColorScheme();
 
   const handleOptionPress = (option: string) => {
-    // TODO: Implement navigation based on selected option
-    console.log("Selected option:", option);
+    if (option === "send") {
+      router.push("/");
+    } else {
+      // TODO: Implement navigation for other options
+      console.log("Selected option:", option);
+    }
   };
 
   return (
@@ -20,7 +25,7 @@ export function DividerScreen() {
 
       <TouchableOpacity
         style={styles.button}
-        onPress={() => handleOptionPress("send")}
+        onPress={() => router.push("/SenderLogin")}
       >
         <Text style={styles.buttonText}>Wanna send a parcel?</Text>
       </TouchableOpacity>
@@ -62,17 +67,17 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: "medium",
     marginBottom: 40,
     textAlign: "center",
   },
   button: {
     width: "100%",
-    padding: 20,
-    borderRadius: 12,
+    padding: 15,
+    borderRadius: 1,
     marginBottom: 16,
-    backgroundColor: "#D3D3D3",
+    backgroundColor: "black",
 
     elevation: 2,
     shadowColor: "#000",
@@ -84,9 +89,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   buttonText: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "400",
     textAlign: "center",
+    color: "white",
   },
   footer: {
     position: "absolute",

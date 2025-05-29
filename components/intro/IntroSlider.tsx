@@ -6,14 +6,14 @@ import {
   NativeSyntheticEvent,
   Pressable,
   StyleSheet,
+  Text,
   useWindowDimensions,
   View,
 } from "react-native";
 
-import { Colors } from "@/constants/Colors";
 import { INTRO_SLIDES } from "@/constants/intro";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { ThemedText } from "../ThemedText";
+// import { ThemedText } from "../ThemedText";
 // import { ThemedView } from "../ThemedView";
 import { IntroPagination } from "./IntroPagination";
 import { IntroSlide } from "./IntroSlide";
@@ -55,13 +55,10 @@ export function IntroSlider() {
       <View style={styles.footer}>
         <IntroPagination total={INTRO_SLIDES.length} current={currentIndex} />
         <Pressable
-          style={[
-            styles.button,
-            { backgroundColor: Colors[colorScheme ?? "light"].tint },
-          ]}
+          style={[styles.button, { backgroundColor: "black" }]}
           onPress={onGetStarted}
         >
-          <ThemedText style={styles.buttonText}>Get Started</ThemedText>
+          <Text style={styles.buttonText}>Get Started</Text>
         </Pressable>
       </View>
     </View>

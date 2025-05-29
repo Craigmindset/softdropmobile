@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "softdropmobile",
-    "slug": "softdropmobile",
+    "name": "softdrop",
+    "slug": "softdrop",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -13,10 +13,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#07251D"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.infinitymind.index.softdrop"
     },
     "web": {
       "bundler": "metro",
@@ -28,15 +29,21 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "##07251D"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "85daaba9-59a0-490b-9c75-2b5a00be6ccd"
+      }
     }
   }
 }
