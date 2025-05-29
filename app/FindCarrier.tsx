@@ -1,5 +1,4 @@
-import { FontAwesome, Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ScrollView,
@@ -11,193 +10,151 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import MapView from "react-native-maps";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const FindCarrier = () => {
-  const router = useRouter();
   const [insurance, setInsurance] = useState(false);
   const [quantity, setQuantity] = useState(0);
 
   return (
     <>
-      <StatusBar
-        barStyle="dark-content"
-        translucent
-        backgroundColor="transparent"
-      />
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        <View style={styles.mapContainer}>
-          {/* Back Icon */}
-          <TouchableOpacity
-            style={styles.backIcon}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={22} color="#222" />
-          </TouchableOpacity>
-          <MapView
-            provider={PROVIDER_GOOGLE}
-            style={styles.mapImage}
-            initialRegion={{
-              latitude: 6.5244,
-              longitude: 3.3792,
-              latitudeDelta: 0.1,
-              longitudeDelta: 0.1,
-            }}
-          >
-            <Marker coordinate={{ latitude: 6.5244, longitude: 3.3792 }}>
-              <View style={{ alignItems: "center" }}>
-                <Ionicons name="location-sharp" size={18} color="tomato" />
-                <Text
-                  style={{
-                    fontSize: 10,
-                    color: "#333",
-                    backgroundColor: "#fff",
-                    paddingHorizontal: 4,
-                    borderRadius: 4,
-                    marginTop: 2,
-                  }}
-                >
-                  Lagos
-                </Text>
-              </View>
-            </Marker>
-          </MapView>
-        </View>
+      {/* Status Bar */}
+      <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0d1117" }}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ flexGrow: 1 }}
+        >
+          {/* Map Section */}
+          <MapView style={styles.map} />
 
-        <View style={styles.formContainer}>
-          <Text style={styles.heading}>Find your choosen route</Text>
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* Header */}
+            <Text style={styles.header}>Find your choosen route</Text>
 
-          {/* Route Type Tabs */}
-          <View style={styles.routeTabs}>
-            <TouchableOpacity style={styles.routeTabActive}>
-              <Ionicons name="location" size={18} color="#fff" />
-              <Text style={styles.routeTabTextActive}>Intra-City</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.routeTab}>
-              <MaterialIcons name="map" size={18} color="#bbb" />
-              <Text style={styles.routeTabText}>Inter-State</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.routeTab}>
-              <FontAwesome name="globe" size={18} color="#bbb" />
-              <Text style={styles.routeTabText}>International</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Item Type */}
-          <Text style={styles.label}>
-            What type of item do you want to send?
-          </Text>
-          <View style={styles.inputField} />
-
-          {/* Quantity and Insurance */}
-          <View style={styles.row}>
-            <View style={styles.quantityContainer}>
-              <Text style={styles.label}>Quantity</Text>
-              <View style={styles.quantityBox}>
-                <Text style={styles.quantityText}>{quantity}</Text>
-              </View>
+            {/* Route Tabs */}
+            <View style={styles.routeTabs}>
+              <TouchableOpacity style={styles.activeTab}>
+                <FontAwesome5 name="city" size={16} color="white" />
+                <Text style={styles.activeTabText}>Intra-City</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.inactiveTab}>
+                <MaterialIcons name="map" size={16} color="#999" />
+                <Text style={styles.inactiveTabText}>Inter-State</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.inactiveTab}>
+                <FontAwesome5 name="globe" size={16} color="#999" />
+                <Text style={styles.inactiveTabText}>International</Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.insuranceContainer}>
-              <Text style={styles.label}>Do you want to insure the item?</Text>
-              <View style={styles.insuranceRow}>
-                <Text style={styles.insuranceOption}>No</Text>
-                <Switch
-                  value={insurance}
-                  onValueChange={setInsurance}
-                  thumbColor="#fff"
-                  trackColor={{ true: "#0f0", false: "#999" }}
-                />
-                <Text style={styles.insuranceOption}>Yes</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Upload Image */}
-          <Text style={styles.label}>Upload Image of Item</Text>
-          <View style={styles.imageUploadRow}>
-            <TouchableOpacity style={styles.uploadButton}>
-              <Text style={styles.plus}>+</Text>
-            </TouchableOpacity>
-            <View style={styles.imagePlaceholder} />
-            <View style={styles.imagePlaceholder} />
-          </View>
-
-          {/* Location Fields */}
-          <View style={styles.rowWithIcon}>
-            <Ionicons
-              name="location"
-              size={18}
-              color="#0f0"
-              style={{ marginRight: 6 }}
+            {/* Item Type Dropdown (Mocked as TextInput for simplicity) */}
+            <Text style={styles.label}>
+              What type of item do you want to send?
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Select item type"
+              placeholderTextColor="#777"
             />
-            <Text style={styles.label}>Use my location</Text>
+
+            {/* Quantity and Insurance Section */}
+            <View style={styles.rowBetween}>
+              <View style={styles.column}>
+                <Text style={styles.label}>Quantity</Text>
+                <View style={styles.quantityBox}>
+                  <Text style={styles.quantityText}>{quantity}</Text>
+                </View>
+              </View>
+              <View style={styles.column}>
+                <Text style={styles.label}>
+                  Do you want to insure the item?
+                </Text>
+                <View style={styles.insuranceRow}>
+                  <Text style={styles.insuranceLabel}>No</Text>
+                  <Switch
+                    value={insurance}
+                    onValueChange={setInsurance}
+                    thumbColor={insurance ? "#fff" : "#fff"}
+                    trackColor={{ false: "#444", true: "#27ae60" }}
+                  />
+                  <Text style={styles.insuranceLabel}>Yes</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Image Upload Section */}
+            <Text style={styles.label}>Upload Image of Item</Text>
+            <View style={styles.imageRow}>
+              <TouchableOpacity style={styles.imageUpload}>
+                <Text style={styles.uploadText}>+</Text>
+              </TouchableOpacity>
+              <View style={styles.imagePlaceholder} />
+              <View style={styles.imagePlaceholder} />
+            </View>
+
+            {/* Location Fields */}
+            <View style={styles.rowWithIcon}>
+              <Ionicons name="location" size={18} color="#27ae60" />
+              <Text style={styles.useLocation}>Use my location</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter sender location"
+              placeholderTextColor="#777"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter receiver location"
+              placeholderTextColor="#777"
+            />
+            <Text style={styles.savedAddress}>
+              Saved Mikano International Limited - Lagos 41B Freedom Way...
+            </Text>
+
+            {/* Receiver Details */}
+            <TextInput
+              style={styles.input}
+              placeholder="Enter receiver’s name"
+              placeholderTextColor="#777"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter receiver’s contact"
+              placeholderTextColor="#777"
+              keyboardType="phone-pad"
+            />
+
+            {/* Submit Button */}
+            <TouchableOpacity style={styles.button}>
+              <Text style={styles.buttonText}>Find a Carrier</Text>
+            </TouchableOpacity>
           </View>
-          <TextInput style={styles.input} placeholder="Enter sender location" />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter receiver location"
-          />
-          <Text style={styles.savedLocation}>
-            Saved Mikano International Limited - Lagos 41B Freedom Way...
-          </Text>
-
-          {/* Receiver Details */}
-          <TextInput style={styles.input} placeholder="Enter receiver’s name" />
-          <TextInput
-            style={styles.input}
-            placeholder="Enter receiver’s contact"
-            keyboardType="phone-pad"
-          />
-
-          {/* Submit Button */}
-          <TouchableOpacity style={styles.button}>
-            <Text style={styles.buttonText}>Find a Carrier</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#000",
+    flex: 1,
+    backgroundColor: "#0d1117",
   },
-  mapContainer: {
-    height: 400,
+  map: {
+    height: 300,
     width: "100%",
-    position: "relative",
-  },
-  mapImage: {
-    width: "100%",
-    height: "100%",
-  },
-  backIcon: {
-    position: "absolute",
-    top: 44, // moved down to avoid status bar overlay (was 16)
-    left: 16,
-    zIndex: 10,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 4,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
   formContainer: {
-    backgroundColor: "#0c0c0c",
     padding: 20,
+    backgroundColor: "#0d1117",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     marginTop: -20,
   },
-  heading: {
+  header: {
     color: "#fff",
     fontSize: 18,
     textAlign: "center",
@@ -208,49 +165,46 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  routeTab: {
+  activeTab: {
     alignItems: "center",
-    padding: 8,
   },
-  routeTabText: {
-    color: "#bbb",
+  inactiveTab: {
+    alignItems: "center",
+  },
+  activeTabText: {
+    color: "#fff",
     fontSize: 12,
     marginTop: 4,
   },
-  routeTabActive: {
-    alignItems: "center",
-    padding: 8,
-    backgroundColor: "#222",
-    borderRadius: 8,
-  },
-  routeTabTextActive: {
-    color: "#fff",
+  inactiveTabText: {
+    color: "#999",
     fontSize: 12,
     marginTop: 4,
   },
   label: {
-    color: "#fff",
+    color: "#ccc",
     fontSize: 14,
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  inputField: {
-    height: 40,
-    backgroundColor: "#222",
+  input: {
+    backgroundColor: "#161b22",
+    color: "#fff",
+    padding: 10,
     borderRadius: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  row: {
+  rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    gap: 12,
   },
-  quantityContainer: {
+  column: {
     flex: 1,
   },
   quantityBox: {
-    height: 40,
-    backgroundColor: "#222",
+    backgroundColor: "#161b22",
     borderRadius: 8,
+    height: 40,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -258,72 +212,65 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
   },
-  insuranceContainer: {
-    flex: 1.5,
-    marginLeft: 10,
-  },
   insuranceRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 6,
   },
-  insuranceOption: {
+  insuranceLabel: {
     color: "#fff",
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
-  imageUploadRow: {
+  imageRow: {
     flexDirection: "row",
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 12,
   },
-  uploadButton: {
+  imageUpload: {
     width: 60,
     height: 60,
-    backgroundColor: "#0f4",
-    borderRadius: 8,
+    backgroundColor: "#27ae60",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 8,
   },
-  plus: {
-    fontSize: 28,
+  uploadText: {
     color: "#fff",
+    fontSize: 24,
   },
   imagePlaceholder: {
     width: 60,
     height: 60,
     borderWidth: 1,
-    borderColor: "#666",
+    borderColor: "#444",
     borderRadius: 8,
-    marginLeft: 10,
   },
   rowWithIcon: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 10,
+    marginBottom: 10,
+    gap: 6,
   },
-  input: {
-    height: 40,
-    backgroundColor: "#222",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    color: "#fff",
-    marginBottom: 12,
+  useLocation: {
+    color: "#27ae60",
+    fontSize: 14,
   },
-  savedLocation: {
+  savedAddress: {
+    color: "#888",
     fontSize: 12,
-    color: "#999",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   button: {
-    backgroundColor: "#0f8",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10,
+    backgroundColor: "#27ae60",
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 12,
   },
   buttonText: {
-    color: "#000",
+    color: "#fff",
     fontSize: 16,
-    fontWeight: "bold",
+    textAlign: "center",
+    fontWeight: "600",
   },
 });
 

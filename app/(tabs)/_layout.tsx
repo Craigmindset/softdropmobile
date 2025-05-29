@@ -5,7 +5,6 @@ import { Platform } from "react-native";
 
 import { HapticTab } from "@/components/HapticTab";
 import TabBarBackground from "@/components/ui/TabBarBackground";
-import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
 export default function TabLayout() {
@@ -14,8 +13,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
-        tabBarInactiveTintColor: "rgba(240,240,240,0.5)", // <-- add this line for faded inactive icons
+        tabBarActiveTintColor: "#fff", // <-- set active tab icon/text color to white
+        tabBarInactiveTintColor: "rgba(180, 169, 169, 0.4)", // <-- add this line for faded inactive icons
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
