@@ -14,7 +14,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: "#fff", // <-- set active tab icon/text color to white
-        tabBarInactiveTintColor: "rgba(180, 169, 169, 0.4)", // <-- add this line for faded inactive icons
+        tabBarInactiveTintColor: "rgba(180, 169, 169, 0.62)", // <-- add this line for faded inactive icons
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyCzPYBrsKb6FdnodoGOMHUKQDNb6P2YFTk"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +20,12 @@
         "backgroundColor": "#07251D"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.infinitymind.index.softdrop"
+      "package": "com.infinitymind.index.softdrop",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCzPYBrsKb6FdnodoGOMHUKQDNb6P2YFTk"
+        }
+      }
     },
     "web": {
       "bundler": "metro",

@@ -1,8 +1,3 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Redirect, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -28,17 +23,15 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <>
       <Stack>
         <Stack.Screen name="intro" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="SenderLogin" options={{ headerShown: false }} />
         <Stack.Screen name="Home" options={{ headerShown: false }} />
         <Stack.Screen name="FindCarrier" options={{ headerShown: false }} />
-
-        <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar style="auto" translucent={false} />
-    </ThemeProvider>
+      <StatusBar style="dark" backgroundColor="#000" translucent={true} />
+    </>
   );
 }

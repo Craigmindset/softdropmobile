@@ -8,7 +8,7 @@ export function DividerScreen() {
 
   const handleOptionPress = (option: string) => {
     if (option === "send") {
-      router.push("/");
+      router.push("/More");
     } else {
       // TODO: Implement navigation for other options
       console.log("Selected option:", option);
