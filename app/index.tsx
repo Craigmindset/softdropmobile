@@ -1,7 +1,7 @@
-import { Stack } from "expo-router";
-import { StyleSheet } from "react-native";
 import { IntroSlider } from "@/components/intro/IntroSlider";
 import { ThemedView } from "@/components/ThemedView";
+import { Stack } from "expo-router";
+import { StyleSheet } from "react-native";
 
 export default function IntroScreen() {
   return (

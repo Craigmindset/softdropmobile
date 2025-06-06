@@ -3,8 +3,9 @@ import {
   FontAwesome5,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal,
   RefreshControl,
@@ -38,6 +39,62 @@ function getDistanceFromLatLonInKm(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const d = R * c; // Distance in km
   return d;
+}
+
+// Helper to extract numeric minutes from eta string (e.g., '8 min' => 8)
+function parseEtaMinutes(eta: string): number {
+  const match = eta.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+// Helper to calculate price and ETA for each carrier
+function calculateCarrierPriceAndEta(carrier: any, distanceKm: number) {
+  // Base fares by carrier title
+  const baseFares: Record<string, number> = {
+    Carrier: 1500,
+    "Bicycle Carrier": 2500,
+    "Bike Carrier": 3500,
+    "Car Carrier": 4000,
+  };
+  const baseFare = baseFares[carrier.title] || 0;
+  const etaMinutes = parseEtaMinutes(carrier.eta);
+  const timeCost = 50 * etaMinutes;
+  const distanceCost = 100 * distanceKm;
+  const total = baseFare + timeCost + distanceCost;
+  return {
+    price: `₦${Math.round(total).toLocaleString()}`,
+    modalPrice: `₦${Math.round(total).toLocaleString()}`,
+    modalEta: `${etaMinutes} min`,
+  };
+}
+
+const GOOGLE_MAPS_API_KEY =
+  Constants?.expoConfig?.extra?.GOOGLE_PLACES_API_KEY ||
+  process.env.GOOGLE_PLACES_API_KEY;
+
+// Helper to fetch real-time ETA from Google Directions API
+async function fetchEtaMinutes(
+  mode: string,
+  origin: { latitude: number; longitude: number },
+  destination: { latitude: number; longitude: number }
+) {
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&mode=${mode}&key=${GOOGLE_MAPS_API_KEY}`;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (
+      data.routes &&
+      data.routes[0] &&
+      data.routes[0].legs &&
+      data.routes[0].legs[0]
+    ) {
+      const duration = data.routes[0].legs[0].duration.value; // seconds
+      return Math.round(duration / 60); // minutes
+    }
+  } catch (e) {
+    // fallback
+  }
+  return null;
 }
 
 export default function SelectCarrierScreen() {
@@ -98,7 +155,11 @@ export default function SelectCarrierScreen() {
   });
 
   const handleCardPress = (carrier: any) => {
-    setModalCarrier(carrier);
+    setModalCarrier({
+      ...carrier,
+      eta: carrier.eta, // Use the real-time ETA fetched from Google
+      modalEta: carrier.eta, // Also update modalEta to match
+    });
     setModalVisible(true);
   };
 
@@ -110,8 +171,9 @@ export default function SelectCarrierScreen() {
     {
       icon: <MaterialCommunityIcons name="walk" size={24} color="#000" />,
       title: "Carrier",
+      mode: "walking",
       eta: "12 min",
-      price: "₦1500",
+      price: "",
       description: "Package delivery",
       note: "Cheaper but longer delivery time",
       modalIcon: (
@@ -123,14 +185,15 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "₦1,500",
-      modalEta: "12 min",
+      modalPrice: "",
+      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="bicycle" size={24} color="#d32f2f" />,
       title: "Bicycle Carrier",
+      mode: "bicycling",
       eta: "8 min",
-      price: "₦2500",
+      price: "",
       description: "Package delivery",
       note: undefined,
       modalIcon: (
@@ -142,14 +205,15 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "₦2,500",
-      modalEta: "8 min",
+      modalPrice: "",
+      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="motorcycle" size={24} color="#0288d1" />,
       title: "Bike Carrier",
+      mode: "driving",
       eta: "8 min",
-      price: "₦3000",
+      price: "",
       description: "Package delivery",
       note: undefined,
       modalIcon: (
@@ -161,14 +225,15 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "₦3,000",
-      modalEta: "8 min",
+      modalPrice: "",
+      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="car" size={24} color="#1565c0" />,
       title: "Car Carrier",
+      mode: "driving",
       eta: "8 min",
-      price: "₦3800",
+      price: "",
       description: "Package delivery",
       note: undefined,
       modalIcon: (
@@ -180,9 +245,38 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "₦3,800",
-      modalEta: "8 min",
+      modalPrice: "",
+      modalEta: "",
     },
+  ]);
+
+  // Fetch real-time ETA on mount or when sender/receiver changes
+  useEffect(() => {
+    async function updateEtas() {
+      const updated = await Promise.all(
+        carriers.map(async (carrier) => {
+          const etaMin = await fetchEtaMinutes(
+            carrier.mode,
+            senderMarker,
+            receiverMarker
+          );
+          const eta = etaMin ? `${etaMin} min` : carrier.eta;
+          const calc = calculateCarrierPriceAndEta(
+            { ...carrier, eta },
+            distanceKm
+          );
+          return { ...carrier, eta, ...calc };
+        })
+      );
+      setCarriers(updated);
+    }
+    updateEtas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    senderMarker.latitude,
+    senderMarker.longitude,
+    receiverMarker.latitude,
+    receiverMarker.longitude,
   ]);
 
   // Simulate fetching carrier data (replace with real API call)
@@ -346,6 +440,7 @@ export default function SelectCarrierScreen() {
                       ", " +
                       receiverMarker.longitude.toFixed(5)}
                 </Text>
+                <Text style={styles.routeText}>ETA: {modalCarrier.eta}</Text>
               </View>
             </View>
 
