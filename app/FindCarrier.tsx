@@ -7,10 +7,11 @@ import {
 } from "@expo/vector-icons";
 import * as Contacts from "expo-contacts"; // Add this import at the top
 import * as ImagePicker from "expo-image-picker";
+import type { LocationObjectCoords } from "expo-location";
 import * as Location from "expo-location";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
@@ -23,22 +24,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import type { Region } from "react-native-maps";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import { supabase } from "../lib/supabase";
 
 const HEADER_BG = "#0d1117";
 
 const FindCarrier = () => {
   const [insurance, setInsurance] = useState(false);
   const [quantity, setQuantity] = useState(1); // Set default quantity to 1
-  const [location, setLocation] = useState(null);
-  const [region, setRegion] = useState(null);
+  const [location, setLocation] = useState<LocationObjectCoords | null>(null);
+  const [region, setRegion] = useState<Region | null>(null);
   const [itemType, setItemType] = useState("");
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [images, setImages] = useState([null, null]); // For two image slots
+  const [images, setImages] = useState<(string | null)[]>([null, null]); // For two image slots
   const [senderLocation, setSenderLocation] = useState(""); // Add this state
   const [lastSenderAddress, setLastSenderAddress] = useState(""); // Add this state at the top inside your component
   const [receiverLocation, setReceiverLocation] = useState(""); // Add this state at the top
   const [receiverContact, setReceiverContact] = useState(""); // Add this state
+  const [receiverName, setReceiverName] = useState(""); // Add this state for receiver name
+  const [isInterState, setIsInterState] = useState(false); // Track Inter-State selection
+  const [deliveryMethod, setDeliveryMethod] = useState("arrival"); // "arrival" or "home"
 
   const router = useRouter();
 
@@ -73,7 +79,7 @@ const FindCarrier = () => {
   }, []);
 
   // Function to get address from coordinates
-  const getAddressFromCoords = async (coords) => {
+  const getAddressFromCoords = async (coords: LocationObjectCoords) => {
     try {
       let [address] = await Location.reverseGeocodeAsync(coords);
       if (address) {
@@ -90,7 +96,7 @@ const FindCarrier = () => {
   };
 
   // Handler for picking image
-  const handlePickImage = async (index) => {
+  const handlePickImage = async (index: number) => {
     // Ask for permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -108,15 +114,17 @@ const FindCarrier = () => {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       const uri = asset.uri;
-      const fileType = asset.type || uri.split(".").pop()?.toLowerCase();
+      const fileType =
+        asset.type ||
+        (uri.split(".").pop() as string | undefined)?.toLowerCase();
       const allowedTypes = ["jpeg", "jpg", "png"];
-      const fileSize = asset.fileSize || asset.size; // Expo SDK 49+ uses fileSize
+      const fileSize = asset.fileSize; // Expo SDK 49+ uses fileSize
 
       // Check file type
       const isTypeAllowed =
-        allowedTypes.includes(fileType) ||
+        (fileType ? allowedTypes.includes(fileType) : false) ||
         (asset.mimeType &&
-          allowedTypes.some((type) => asset.mimeType.includes(type)));
+          allowedTypes.some((type) => asset.mimeType?.includes(type)));
 
       // Check file size (max 5MB = 5 * 1024 * 1024 bytes)
       const isSizeAllowed = !fileSize || fileSize <= 5 * 1024 * 1024;
@@ -133,10 +141,6 @@ const FindCarrier = () => {
       const newImages = [...images];
       newImages[index] = uri;
       setImages(newImages);
-
-      // TODO: Here you can upload the image to your backend or cloud storage,
-      // and save the returned URL to your database for this delivery/order.
-      // Example: await uploadImageToServer(uri);
     }
   };
 
@@ -153,6 +157,105 @@ const FindCarrier = () => {
     const { data } = await Contacts.presentFormAsync();
     if (data && data.phoneNumbers && data.phoneNumbers.length > 0) {
       setReceiverContact(data.phoneNumbers[0].number);
+    }
+  };
+
+  // Handler for submitting delivery request
+  const handleSubmitDeliveryRequest = async () => {
+    if (
+      !itemType ||
+      !senderLocation ||
+      !receiverLocation ||
+      !receiverContact ||
+      !receiverName
+    ) {
+      Alert.alert("Missing Fields", "Please fill all required fields.");
+      return;
+    }
+    try {
+      // Get current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Auth error:", userError);
+        Alert.alert(
+          "Auth Error",
+          "Could not get current user. Please log in again."
+        );
+        return;
+      }
+      const sender_id = user.id;
+
+      // Geocode receiver location
+      let receiver_latitude = null;
+      let receiver_longitude = null;
+      try {
+        const geoResults = await Location.geocodeAsync(receiverLocation);
+        if (geoResults && geoResults.length > 0) {
+          receiver_latitude = geoResults[0].latitude;
+          receiver_longitude = geoResults[0].longitude;
+        }
+      } catch (geoErr) {
+        console.error("Geocoding error for receiver location:", geoErr);
+      }
+
+      const { error } = await supabase.from("delivery_request").insert([
+        {
+          sender_id,
+          item_type: itemType,
+          quantity,
+          insurance,
+          images: images.filter(Boolean),
+          sender_location: senderLocation,
+          sender_latitude: location?.latitude ?? null,
+          sender_longitude: location?.longitude ?? null,
+          receiver_location: receiverLocation,
+          receiver_latitude,
+          receiver_longitude,
+          receiver_contact: receiverContact,
+          receiver_name: receiverName,
+          is_inter_state: isInterState,
+          delivery_method: deliveryMethod,
+        },
+      ]);
+      if (error) {
+        console.error("Supabase submission error:", error);
+        Alert.alert(
+          "Submission Failed",
+          error.message || "Could not submit request."
+        );
+        return;
+      }
+      setLastSenderAddress(senderLocation); // Save the last used sender address
+      router.push({
+        pathname: "/SelectCarrier",
+        params: {
+          sender_latitude: location?.latitude
+            ? String(location.latitude)
+            : undefined,
+          sender_longitude: location?.longitude
+            ? String(location.longitude)
+            : undefined,
+          receiver_latitude: receiver_latitude
+            ? String(receiver_latitude)
+            : undefined,
+          receiver_longitude: receiver_longitude
+            ? String(receiver_longitude)
+            : undefined,
+          sender_location: senderLocation,
+          receiver_location: receiverLocation,
+        },
+      }); // Navigate to SelectCarrier screen
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        console.error("Unexpected error:", e);
+        Alert.alert("Error", e.message || "An error occurred.");
+      } else {
+        console.error("Unknown error:", e);
+        Alert.alert("Error", "An error occurred.");
+      }
     }
   };
 
@@ -190,7 +293,7 @@ const FindCarrier = () => {
           <MapView
             style={styles.map}
             provider={PROVIDER_GOOGLE}
-            region={region}
+            region={region || undefined}
             showsUserLocation={true}
             showsMyLocationButton={true}
             loadingEnabled={true}
@@ -244,18 +347,62 @@ const FindCarrier = () => {
           </View>
           {/* Route Tabs */}
           <View style={styles.routeTabs}>
-            <TouchableOpacity style={styles.activeTab}>
-              <Entypo name="location-pin" size={30} color="orangered" />
-              <Text style={styles.activeTabText}>Intra-City</Text>
+            <TouchableOpacity
+              style={isInterState ? styles.inactiveTab : styles.activeTab}
+              onPress={() => setIsInterState(false)}
+            >
+              <Entypo
+                name="location-pin"
+                size={30}
+                color={isInterState ? "#999" : "#27ae60"}
+              />
+              <Text
+                style={
+                  isInterState ? styles.inactiveTabText : styles.activeTabText
+                }
+              >
+                Intra-City
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.inactiveTab}>
-              <MaterialIcons name="map" size={30} color="#999" />
-              <Text style={styles.inactiveTabText}>Inter-State</Text>
+            <TouchableOpacity
+              style={isInterState ? styles.activeTab : styles.inactiveTab}
+              onPress={() => setIsInterState(true)}
+            >
+              <MaterialIcons
+                name="map"
+                size={30}
+                color={isInterState ? "#27ae60" : "#999"}
+              />
+              <Text
+                style={
+                  isInterState ? styles.activeTabText : styles.inactiveTabText
+                }
+              >
+                Inter-State
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.inactiveTab}>
+            <View style={[styles.inactiveTab, { position: "relative" }]}>
               <FontAwesome5 name="globe" size={30} color="#999" />
               <Text style={styles.inactiveTabText}>International</Text>
-            </TouchableOpacity>
+              {/* Coming Soon Badge */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  right: -16,
+                  backgroundColor: "#e67e22",
+                  borderRadius: 8,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}
+                >
+                  Coming Soon
+                </Text>
+              </View>
+            </View>
           </View>
 
           <View style={{ marginTop: 20 }}>
@@ -504,6 +651,8 @@ const FindCarrier = () => {
               style={styles.input}
               placeholder="Enter receiver’s name"
               placeholderTextColor="#777"
+              value={receiverName}
+              onChangeText={setReceiverName}
             />
             <View style={{ position: "relative" }}>
               <TextInput
@@ -556,13 +705,101 @@ const FindCarrier = () => {
             </View>
           </View>
 
+          {/* Delivery Method Section - Conditionally Rendered */}
+          {isInterState && (
+            <View
+              style={{
+                marginBottom: 20,
+                backgroundColor: "#23272f",
+                borderRadius: 10,
+                padding: 16,
+                marginTop: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  fontSize: 16,
+                  marginBottom: 12,
+                  color: "#fff",
+                }}
+              >
+                Select Delivery Method
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                {/* Upon Arrival Button */}
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor:
+                      deliveryMethod === "arrival" ? "#27ae60" : "#2c2f36",
+                    padding: 12,
+                    borderRadius: 8,
+                    marginRight: 8,
+                  }}
+                  onPress={() => setDeliveryMethod("arrival")}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons
+                    name="location-on"
+                    size={20}
+                    color={deliveryMethod === "arrival" ? "#fff" : "#aaa"}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text
+                    style={{
+                      color: deliveryMethod === "arrival" ? "#fff" : "#ccc",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Upon arrival
+                  </Text>
+                </TouchableOpacity>
+                {/* Home Delivery Button */}
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor:
+                      deliveryMethod === "home" ? "#27ae60" : "#2c2f36",
+                    padding: 12,
+                    borderRadius: 8,
+                    marginLeft: 8,
+                  }}
+                  onPress={() => setDeliveryMethod("home")}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons
+                    name="home"
+                    size={20}
+                    color={deliveryMethod === "home" ? "#fff" : "#aaa"}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text
+                    style={{
+                      color: deliveryMethod === "home" ? "#fff" : "#ccc",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Home Delivery
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.button, { marginTop: 32 }]} // Increased marginTop for more space
-            onPress={() => {
-              setLastSenderAddress(senderLocation); // Save the last used sender address
-              // ...your existing logic for finding a carrier...
-            }}
+            style={[styles.button, { marginTop: 32 }]}
+            onPress={handleSubmitDeliveryRequest}
           >
             <Text style={styles.buttonText}>Find a Carrier</Text>
           </TouchableOpacity>

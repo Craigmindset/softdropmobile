@@ -1,7 +1,8 @@
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { router } from "expo-router";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import LottieView from "lottie-react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function DividerScreen() {
   const colorScheme = useColorScheme();
@@ -17,8 +18,10 @@ export function DividerScreen() {
 
   return (
     <View style={styles.container}>
-      <Image
-        source={require("@/assets/images/intro-slide-4.jpg")}
+      <LottieView
+        source={require("@/assets/images/smiles.json")}
+        autoPlay
+        loop
         style={styles.image}
       />
       <Text style={styles.title}>What would you like to do today?</Text>
@@ -32,7 +35,7 @@ export function DividerScreen() {
 
       <TouchableOpacity
         style={styles.button}
-        onPress={() => handleOptionPress("carrier")}
+        onPress={() => router.push("/CarrierLogin")}
       >
         <Text style={styles.buttonText}>Become a Carrier</Text>
       </TouchableOpacity>

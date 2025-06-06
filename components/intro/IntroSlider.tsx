@@ -48,9 +48,9 @@ export function IntroSlider() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.id.toString()}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        keyExtractor={(item) => item.id.toString()}
       />
       <View style={styles.footer}>
         <IntroPagination total={INTRO_SLIDES.length} current={currentIndex} />

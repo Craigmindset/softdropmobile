@@ -25,7 +25,11 @@
         "googleMaps": {
           "apiKey": "AIzaSyCzPYBrsKb6FdnodoGOMHUKQDNb6P2YFTk"
         }
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -40,7 +44,7 @@
           "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "##07251D"
+          "backgroundColor": "#07251D"
         }
       ]
     ],
@@ -52,6 +56,7 @@
       "eas": {
         "projectId": "85daaba9-59a0-490b-9c75-2b5a00be6ccd"
       }
-    }
+    },
+    "owner": "infinitymind.index"
   }
 }

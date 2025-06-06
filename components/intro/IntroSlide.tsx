@@ -1,18 +1,29 @@
 import { Image } from "expo-image";
+import LottieView from "lottie-react-native";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 interface IntroSlideProps {
   title: string;
   description: string;
   image: any;
+  isLottie?: boolean;
 }
 
-export function IntroSlide({ title, description, image }: IntroSlideProps) {
+export function IntroSlide({
+  title,
+  description,
+  image,
+  isLottie,
+}: IntroSlideProps) {
   const { width } = useWindowDimensions();
 
   return (
     <View style={[styles.slide, { width }]}>
-      <Image source={image} style={styles.image} contentFit="contain" />
+      {isLottie ? (
+        <LottieView source={image} autoPlay loop style={styles.image} />
+      ) : (
+        <Image source={image} style={styles.image} contentFit="contain" />
+      )}
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.description}>{description}</Text>
