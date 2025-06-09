@@ -7,6 +7,7 @@ import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   RefreshControl,
   ScrollView,
@@ -16,6 +17,8 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from "react-native-maps";
+import { supabase } from "../lib/supabase";
+import { useDeliveryRequest } from "./DeliveryRequestContext";
 
 // Helper to calculate distance between two lat/lng points (Haversine formula)
 function getDistanceFromLatLonInKm(
@@ -72,8 +75,8 @@ const GOOGLE_MAPS_API_KEY =
   Constants?.expoConfig?.extra?.GOOGLE_PLACES_API_KEY ||
   process.env.GOOGLE_PLACES_API_KEY;
 
-// Helper to fetch real-time ETA from Google Directions API
-async function fetchEtaMinutes(
+// Helper to fetch real-time ETA and route distance from Google Directions API
+async function fetchEtaAndDistance(
   mode: string,
   origin: { latitude: number; longitude: number },
   destination: { latitude: number; longitude: number }
@@ -89,17 +92,30 @@ async function fetchEtaMinutes(
       data.routes[0].legs[0]
     ) {
       const duration = data.routes[0].legs[0].duration.value; // seconds
-      return Math.round(duration / 60); // minutes
+      const distanceMeters = data.routes[0].legs[0].distance.value; // meters
+      return {
+        etaMin: Math.round(duration / 60),
+        distanceKm: distanceMeters / 1000,
+      };
     }
   } catch (e) {
     // fallback
   }
-  return null;
+  return { etaMin: null, distanceKm: null };
 }
+
+// Add mapping from carrier title to carriage_type
+const CARRIAGE_TYPE_MAP: Record<string, string> = {
+  Carrier: "Carrier",
+  "Bicycle Carrier": "Bicycle",
+  "Bike Carrier": "Bike",
+  "Car Carrier": "Car",
+};
 
 export default function SelectCarrierScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { setRequest } = useDeliveryRequest();
 
   // Use only the robust marker logic for map and polyline, remove senderLocation/receiverLocation legacy fallback
   // Remove senderLocation and receiverLocation above, and use only senderMarker and receiverMarker everywhere for map and polyline
@@ -118,47 +134,71 @@ export default function SelectCarrierScreen() {
     params.receiver_longitude ?? params.receiverLng
   );
 
-  // Only use marker if both lat/lng are valid numbers
+  // Only use marker if both lat/lng are valid numbers from params (inputted address)
+  // Never use device location for sender marker; fallback is a neutral default (Lagos center)
   const senderMarker =
     senderLat !== null && senderLng !== null
       ? { latitude: senderLat, longitude: senderLng }
-      : { latitude: 6.6018, longitude: 3.3515 };
+      : { latitude: 6.5244, longitude: 3.3792 }; // Lagos center as fallback
+
+  // Same logic for receiver marker
   const receiverMarker =
     receiverLat !== null && receiverLng !== null
       ? { latitude: receiverLat, longitude: receiverLng }
-      : { latitude: 6.4294, longitude: 3.4219 };
+      : { latitude: 6.5244, longitude: 3.3792 }; // Lagos center as fallback
 
-  const initialRegion = {
-    latitude: (senderMarker.latitude + receiverMarker.latitude) / 2,
-    longitude: (senderMarker.longitude + receiverMarker.longitude) / 2,
-    latitudeDelta:
-      Math.abs(senderMarker.latitude - receiverMarker.latitude) + 0.09,
-    longitudeDelta:
-      Math.abs(senderMarker.longitude - receiverMarker.longitude) + 0.04,
-  };
+  // If either marker is missing, fallback to a default region
+  const initialRegion =
+    senderMarker && receiverMarker
+      ? {
+          latitude: (senderMarker.latitude + receiverMarker.latitude) / 2,
+          longitude: (senderMarker.longitude + receiverMarker.longitude) / 2,
+          latitudeDelta: 0.01, // Street-level zoom
+          longitudeDelta: 0.01, // Street-level zoom
+        }
+      : {
+          latitude: 6.6018,
+          longitude: 3.3515,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
 
-  const distanceKm = getDistanceFromLatLonInKm(
-    senderMarker.latitude,
-    senderMarker.longitude,
-    receiverMarker.latitude,
-    receiverMarker.longitude
-  );
-  const distanceText = `${distanceKm.toFixed(1)} km`;
+  const distanceKm =
+    senderMarker && receiverMarker
+      ? getDistanceFromLatLonInKm(
+          senderMarker.latitude,
+          senderMarker.longitude,
+          receiverMarker.latitude,
+          receiverMarker.longitude
+        )
+      : 0;
+
+  // Add state for real route distance
+  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const distanceText = routeDistanceKm
+    ? `${routeDistanceKm.toFixed(1)} km`
+    : `${distanceKm.toFixed(1)} km`;
 
   // Modal state
   const [isModalVisible, setModalVisible] = useState(false);
+  // Update modalCarrier state to include cardTitle
   const [modalCarrier, setModalCarrier] = useState({
     icon: null,
     title: "",
     price: "",
     eta: "",
+    cardTitle: "", // <-- add this property
   });
 
+  // When a carrier card is pressed, show modal with up-to-date info
+  // In handleCardPress, pass both the card's title and modalTitle
   const handleCardPress = (carrier: any) => {
     setModalCarrier({
       ...carrier,
-      eta: carrier.eta, // Use the real-time ETA fetched from Google
-      modalEta: carrier.eta, // Also update modalEta to match
+      eta: carrier.modalEta,
+      modalEta: carrier.modalEta,
+      cardTitle: carrier.title, // always the card's title, e.g., 'Bike Carrier'
+      modalTitle: carrier.modalTitle, // can be 'Intra-city Delivery', but not used for mapping
     });
     setModalVisible(true);
   };
@@ -172,7 +212,7 @@ export default function SelectCarrierScreen() {
       icon: <MaterialCommunityIcons name="walk" size={24} color="#000" />,
       title: "Carrier",
       mode: "walking",
-      eta: "12 min",
+      eta: "Loading",
       price: "",
       description: "Package delivery",
       note: "Cheaper but longer delivery time",
@@ -185,14 +225,12 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "",
-      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="bicycle" size={24} color="#d32f2f" />,
       title: "Bicycle Carrier",
       mode: "bicycling",
-      eta: "8 min",
+      eta: "Loading",
       price: "",
       description: "Package delivery",
       note: undefined,
@@ -205,14 +243,12 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "",
-      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="motorcycle" size={24} color="#0288d1" />,
       title: "Bike Carrier",
       mode: "driving",
-      eta: "8 min",
+      eta: "Loading",
       price: "",
       description: "Package delivery",
       note: undefined,
@@ -225,14 +261,12 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "",
-      modalEta: "",
     },
     {
       icon: <FontAwesome5 name="car" size={24} color="#1565c0" />,
       title: "Car Carrier",
       mode: "driving",
-      eta: "8 min",
+      eta: "Loading",
       price: "",
       description: "Package delivery",
       note: undefined,
@@ -245,32 +279,65 @@ export default function SelectCarrierScreen() {
         />
       ),
       modalTitle: "Intra-city Delivery",
-      modalPrice: "",
-      modalEta: "",
     },
   ]);
 
+  // Add state for online carriers
+  const [onlineCarriers, setOnlineCarriers] = useState<any[]>([]);
+
+  // Fetch online carriers on mount and every 5 seconds
+  useEffect(() => {
+    async function fetchOnlineCarriers() {
+      const { data, error } = await supabase
+        .from("carrier_profile")
+        .select("user_id, latitude, longitude, carrier_type, first_name")
+        .eq("is_online", true);
+      if (!error && data) {
+        setOnlineCarriers(
+          data.filter(
+            (carrier) =>
+              typeof carrier.latitude === "number" &&
+              typeof carrier.longitude === "number"
+          )
+        );
+      }
+    }
+    fetchOnlineCarriers();
+    const interval = setInterval(fetchOnlineCarriers, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch real-time ETA on mount or when sender/receiver changes
   useEffect(() => {
-    async function updateEtas() {
+    async function updateEtasAndDistance() {
+      // Use the first carrier's mode for the main route distance (e.g., walking)
+      const { etaMin, distanceKm: realDistance } = await fetchEtaAndDistance(
+        carriers[0].mode,
+        senderMarker,
+        receiverMarker
+      );
+      if (realDistance) setRouteDistanceKm(realDistance);
+      else setRouteDistanceKm(null);
+      // Use real route distance for all price calculations
+      const usedDistance = realDistance || distanceKm;
       const updated = await Promise.all(
         carriers.map(async (carrier) => {
-          const etaMin = await fetchEtaMinutes(
+          const { etaMin: eta } = await fetchEtaAndDistance(
             carrier.mode,
             senderMarker,
             receiverMarker
           );
-          const eta = etaMin ? `${etaMin} min` : carrier.eta;
+          const etaStr = eta ? `${eta} min` : carrier.eta;
           const calc = calculateCarrierPriceAndEta(
-            { ...carrier, eta },
-            distanceKm
+            { ...carrier, eta: etaStr },
+            usedDistance
           );
-          return { ...carrier, eta, ...calc };
+          return { ...carrier, ...calc, eta: etaStr, modalEta: etaStr };
         })
       );
       setCarriers(updated);
     }
-    updateEtas();
+    updateEtasAndDistance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     senderMarker.latitude,
@@ -329,29 +396,52 @@ export default function SelectCarrierScreen() {
           userInterfaceStyle="light"
         >
           {/* Sender Marker */}
-          <Marker
-            coordinate={senderMarker}
-            title="Sender"
-            pinColor="#27ae60"
-            tracksViewChanges={true}
-          >
-            <FontAwesome5 name="map-marker-alt" size={22} color="#27ae60" />
-          </Marker>
+          {senderMarker && (
+            <Marker
+              coordinate={senderMarker}
+              title="Sender"
+              pinColor="#27ae60"
+              tracksViewChanges={true}
+            >
+              <FontAwesome5 name="map-marker-alt" size={22} color="#27ae60" />
+            </Marker>
+          )}
           {/* Receiver Marker */}
-          <Marker
-            coordinate={receiverMarker}
-            title="Receiver"
-            pinColor="#e74c3c"
-            tracksViewChanges={true}
-          >
-            <FontAwesome5 name="map-marker-alt" size={22} color="#e74c3c" />
-          </Marker>
+          {receiverMarker && (
+            <Marker
+              coordinate={receiverMarker}
+              title="Receiver"
+              pinColor="#e74c3c"
+              tracksViewChanges={true}
+            >
+              <FontAwesome5 name="map-marker-alt" size={22} color="#e74c3c" />
+            </Marker>
+          )}
+          {/* Online Carrier Markers */}
+          {onlineCarriers.map((carrier, idx) => (
+            <Marker
+              key={carrier.user_id || idx}
+              coordinate={{
+                latitude: carrier.latitude,
+                longitude: carrier.longitude,
+              }}
+              title={carrier.first_name || "Carrier"}
+            >
+              {carrier.carrier_type === "Bike" ? (
+                <FontAwesome5 name="motorcycle" size={28} color="#000" />
+              ) : (
+                <FontAwesome5 name="bicycle" size={28} color="#0DB760" />
+              )}
+            </Marker>
+          ))}
           {/* Line connecting both markers */}
-          <Polyline
-            coordinates={[senderMarker, receiverMarker]}
-            strokeColor="#1565c0"
-            strokeWidth={3}
-          />
+          {senderMarker && receiverMarker && (
+            <Polyline
+              coordinates={[senderMarker, receiverMarker]}
+              strokeColor="#1565c0"
+              strokeWidth={3}
+            />
+          )}
         </MapView>
         {/* Distance Overlay */}
         <View style={styles.distanceLabel}>
@@ -380,9 +470,10 @@ export default function SelectCarrierScreen() {
               onPress={() =>
                 handleCardPress({
                   icon: carrier.modalIcon,
-                  title: carrier.modalTitle,
-                  price: carrier.modalPrice,
-                  eta: carrier.modalEta,
+                  title: carrier.title, // pass the card's title here
+                  price: carrier.price,
+                  eta: carrier.eta,
+                  modalTitle: carrier.modalTitle,
                 })
               }
             />
@@ -454,9 +545,73 @@ export default function SelectCarrierScreen() {
             {/* Select Button */}
             <TouchableOpacity
               style={styles.selectBtn}
-              onPress={() => {
+              onPress={async () => {
                 setModalVisible(false);
-                router.push("/PeerCarrier");
+                // Map card title to carrier_type explicitly
+                const cardTitleToType: Record<string, string> = {
+                  Carrier: "Carrier",
+                  "Bicycle Carrier": "Bicycle",
+                  "Bike Carrier": "Bike",
+                  "Car Carrier": "Car",
+                };
+                // Use cardTitle if present, else fallback to modalCarrier.title
+                const cardTitle = modalCarrier.cardTitle || modalCarrier.title;
+                const carrierType = cardTitleToType[cardTitle] || "Carrier";
+                console.log(
+                  "[SelectCarrier] Selected carrierType:",
+                  carrierType,
+                  "from cardTitle:",
+                  cardTitle
+                );
+                try {
+                  const { data: carriers, error } = await supabase
+                    .from("carrier_profile")
+                    .select("*")
+                    .eq("carrier_type", carrierType)
+                    .eq("is_online", true);
+                  console.log("[SelectCarrier] Supabase raw data:", carriers);
+                  if (error) {
+                    console.error("[SelectCarrier] Supabase error:", error);
+                    alert(error.message || "Failed to find carriers");
+                    return;
+                  }
+                  // Extra: Log all online carrier types for debugging
+                  const { data: allOnline, error: onlineErr } = await supabase
+                    .from("carrier_profile")
+                    .select("carrier_type, user_id")
+                    .eq("is_online", true);
+                  if (!onlineErr && allOnline) {
+                    const types = allOnline.map((c) => c.carrier_type);
+                    console.log(
+                      "[SelectCarrier] All online carrier types:",
+                      types
+                    );
+                  }
+                  if (!carriers || carriers.length === 0) {
+                    console.warn(
+                      `[SelectCarrier] No available carriers for type: ${carrierType}`
+                    );
+                    alert(`No available carriers for type: ${carrierType}`);
+                    return;
+                  }
+                  console.log(
+                    `[SelectCarrier] Found ${carriers.length} carriers for type: ${carrierType}`,
+                    carriers
+                  );
+                  // Pass the found carriers to the next screen
+                  router.push({
+                    pathname: "/PeerCarrier",
+                    params: { carrierType, carriers: JSON.stringify(carriers) },
+                  });
+                } catch (e) {
+                  if (e instanceof Error) {
+                    console.error("[SelectCarrier] Exception:", e.message, e);
+                    alert(e.message || "Failed to send request");
+                  } else {
+                    console.error("[SelectCarrier] Unknown exception:", e);
+                    alert("Failed to send request");
+                  }
+                }
               }}
             >
               <Text style={styles.selectBtnText}>Select Carrier</Text>
@@ -498,7 +653,20 @@ function CarrierCard({
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{title}</Text>
           <Text style={styles.etaText}>
-            ETA <Text style={{ fontWeight: "bold" }}>{eta}</Text> away
+            ETA{" "}
+            {eta === "Loading" ? (
+              <>
+                <ActivityIndicator
+                  size="small"
+                  color="#00c2a8"
+                  style={{ marginLeft: 4 }}
+                />
+                <Text style={{ fontWeight: "bold" }}> (fetching...)</Text>
+              </>
+            ) : (
+              <Text style={{ fontWeight: "bold" }}>{eta}</Text>
+            )}{" "}
+            away
           </Text>
           <Text style={styles.cardDescription}>{description}</Text>
           {note && <Text style={styles.cardNote}>{note}</Text>}

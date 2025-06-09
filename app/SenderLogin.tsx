@@ -1,10 +1,12 @@
 import { AntDesign } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   StyleSheet,
@@ -19,6 +21,8 @@ const SenderLoginScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const router = useRouter();
 
   // Load cached phone number on mount
@@ -70,7 +74,6 @@ const SenderLoginScreen = () => {
       return;
     }
     try {
-      // Format phone number to international format for Supabase
       const formatPhone = (phone: string): string => {
         if (phone.startsWith("0") && phone.length === 11) {
           return "+234" + phone.slice(1);
@@ -78,7 +81,6 @@ const SenderLoginScreen = () => {
         return phone;
       };
       const formattedPhone = formatPhone(phoneNumber);
-      // Supabase sign in with phone and password
       const { data, error } = await supabase.auth.signInWithPassword({
         phone: formattedPhone,
         password,
@@ -90,9 +92,21 @@ const SenderLoginScreen = () => {
         );
         return;
       }
-      await AsyncStorage.setItem("cachedPhoneNumber", phoneNumber); // Cache phone number
-      Alert.alert("Login Successful", "Welcome!");
-      router.replace("/(tabs)/Home");
+
+      // Check if first time login
+      const hasLoggedIn = await AsyncStorage.getItem("hasLoggedIn");
+      if (!hasLoggedIn) {
+        setWelcomeMessage("Login Successful! Welcome to SoftDrop");
+        await AsyncStorage.setItem("hasLoggedIn", "true");
+      } else {
+        setWelcomeMessage("Making every, Move Count\nWelcome Back");
+      }
+      await AsyncStorage.setItem("cachedPhoneNumber", phoneNumber);
+      setShowSuccessModal(true);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        router.replace("/(tabs)/Home");
+      }, 2200); // Show modal for 2.2 seconds
     } catch (e) {
       Alert.alert("Login Failed", "Unexpected error. Please try again.");
     }
@@ -100,6 +114,26 @@ const SenderLoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Success Modal with Lottie */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <LottieView
+              source={require("../assets/images/smiles.json")}
+              autoPlay
+              loop={false}
+              style={{ width: 120, height: 120 }}
+            />
+            <Text style={styles.modalText}>{welcomeMessage}</Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Back Icon */}
       <TouchableOpacity
         style={{
@@ -260,13 +294,34 @@ const styles = StyleSheet.create({
   },
   signupLink: {
     color: "#e74c3c",
-    fontWeight: "bold",
+    fontWeight: "medium",
+    fontSize: 16,
   },
   characterCount: {
     fontSize: 12,
     color: "#aaa",
     textAlign: "right",
     marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 32,
+    alignItems: "center",
+    elevation: 5,
+  },
+  modalText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111", // changed from "#2ecc71" to black
+    textAlign: "center",
   },
 });
 

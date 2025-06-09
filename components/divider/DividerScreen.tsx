@@ -30,7 +30,7 @@ export function DividerScreen() {
         style={styles.button}
         onPress={() => router.push("/SenderLogin")}
       >
-        <Text style={styles.buttonText}>Wanna send a parcel?</Text>
+        <Text style={styles.buttonText}> Send a parcel</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -48,7 +48,7 @@ export function DividerScreen() {
       </TouchableOpacity>
 
       <Text style={styles.footer}>
-        softdrop logistics | Insured by{" "}
+        softdrop | Insured by{" "}
         <Text style={styles.highlight}>Insurance Company</Text>
       </Text>
     </View>

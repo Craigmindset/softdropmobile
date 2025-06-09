@@ -211,6 +211,8 @@ const FindCarrier = () => {
           sender_location: senderLocation,
           sender_latitude: location?.latitude ?? null,
           sender_longitude: location?.longitude ?? null,
+          sender_contact: user.phone || null, // Add sender contact here
+          sender_name: user.user_metadata?.first_name || null, // Add sender name here
           receiver_location: receiverLocation,
           receiver_latitude,
           receiver_longitude,

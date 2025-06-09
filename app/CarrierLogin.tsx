@@ -217,6 +217,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     backgroundColor: "#f9f9f9",
+    color: "#111", // set input text to black
   },
   togglePassword: {
     position: "absolute",
@@ -255,7 +256,8 @@ const styles = StyleSheet.create({
   },
   signupLink: {
     color: "#e74c3c",
-    fontWeight: "bold",
+    fontWeight: "medium",
+    fontSize: 16,
   },
   characterCount: {
     fontSize: 12,

@@ -1,62 +1,80 @@
+import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dimensions,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
+import { supabase } from "../lib/supabase";
 
 // Helper to generate random coordinates near a center point
-const getRandomCoords = (center, delta = 0.01) => ({
+const getRandomCoords = (
+  center: { latitude: number; longitude: number },
+  delta = 0.01
+) => ({
   latitude: center.latitude + (Math.random() - 0.5) * delta,
   longitude: center.longitude + (Math.random() - 0.5) * delta,
 });
 
 const PeerCarrier = () => {
-  const [time, setTime] = useState(60); // Changed from 59 to 60
+  const [time, setTime] = useState(30); // Changed from 60 to 30
+  const [carriers, setCarriers] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [showRetry, setShowRetry] = useState(false);
   const router = useRouter();
 
   // All markers centered around Ikeja, Toyin St, Opebi
   const center = { latitude: 6.6018, longitude: 3.3515 }; // Ikeja, Toyin St, Opebi
-  const fallbackMarkers = [
-    {
-      coordinate: {
-        latitude: center.latitude + 0.002,
-        longitude: center.longitude + 0.002,
-      },
-      title: "Courier 1",
-    },
-    {
-      coordinate: {
-        latitude: center.latitude - 0.002,
-        longitude: center.longitude - 0.002,
-      },
-      title: "Courier 2",
-    },
-    {
-      coordinate: {
-        latitude: center.latitude + 0.0015,
-        longitude: center.longitude - 0.0015,
-      },
-      title: "Courier 3",
-    },
-  ];
 
   useEffect(() => {
+    // Fetch available carriers from Supabase
+    async function fetchCarriers() {
+      const { data, error } = await supabase
+        .from("carrier_profile")
+        .select(
+          "user_id, first_name, last_name, profile_image_url, latitude, longitude, carrier_type, is_online"
+        )
+        .limit(20);
+      if (!error && data) {
+        // Only show carriers who are online and have valid lat/lng
+        setCarriers(
+          data.filter(
+            (carrier) =>
+              (carrier.is_online === undefined || carrier.is_online === true) &&
+              typeof carrier.latitude === "number" &&
+              typeof carrier.longitude === "number"
+          )
+        );
+      }
+    }
+    fetchCarriers();
+    const interval = setInterval(fetchCarriers, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Fetch current user id
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (time === 0) {
+      setShowRetry(true);
+      // router.replace("/Accept"); // Remove auto-navigation
+    }
     const timer = setInterval(() => {
       setTime((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-
-    // Navigate to Accept screen when countdown finishes
-    if (time === 0) {
-      router.replace("/Accept");
-    }
-
     return () => clearInterval(timer);
   }, [time]);
 
@@ -76,20 +94,56 @@ const PeerCarrier = () => {
           longitudeDelta: 0.01,
         }}
       >
-        {/* Courier Markers centered around Ikeja, Toyin St, Opebi */}
-        {fallbackMarkers.map((marker, idx) => (
-          <Marker key={idx} coordinate={marker.coordinate} title={marker.title}>
-            <View style={{ alignItems: "center" }}>
-              <Image
-                source={require("../assets/images/avatar1.png")}
-                style={styles.markerAvatar}
+        {/* Carrier Markers from DB */}
+        {carriers.map((carrier, idx) => {
+          // Choose icon based on carrier_type
+          let icon = <FontAwesome5 name="user" size={32} color="#0DB760" />;
+          if (carrier.carrier_type === "Bicycle") {
+            icon = <FontAwesome5 name="bicycle" size={32} color="#0DB760" />;
+          } else if (carrier.carrier_type === "Bike") {
+            icon = (
+              <MaterialCommunityIcons
+                name="motorbike"
+                size={32}
+                color="#0DB760"
               />
-              <Text style={{ fontWeight: "bold", fontSize: 12, marginTop: 2 }}>
-                Carrier
-              </Text>
-            </View>
-          </Marker>
-        ))}
+            );
+          } else if (carrier.carrier_type === "Car") {
+            icon = <FontAwesome5 name="car" size={32} color="#0DB760" />;
+          }
+          // Highlight current user
+          const isCurrentUser =
+            currentUserId && carrier.user_id === currentUserId;
+          return (
+            <Marker
+              key={carrier.user_id || idx}
+              coordinate={{
+                latitude: carrier.latitude,
+                longitude: carrier.longitude,
+              }}
+              title={isCurrentUser ? "You" : carrier.first_name || "Carrier"}
+              {...(!isCurrentUser && { pinColor: undefined })} // Remove pinColor for current user
+            >
+              <View style={{ alignItems: "center" }}>
+                {isCurrentUser ? (
+                  // Show only gold bike icon for current user (online carrier)
+                  <MaterialCommunityIcons
+                    name="motorbike"
+                    size={36}
+                    color="#FFD700"
+                  />
+                ) : (
+                  icon
+                )}
+                <Text
+                  style={{ fontWeight: "bold", fontSize: 12, marginTop: 2 }}
+                >
+                  {isCurrentUser ? "You" : carrier.first_name || "Carrier"}
+                </Text>
+              </View>
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* Back button */}
@@ -115,7 +169,9 @@ const PeerCarrier = () => {
 
       {/* Bottom Pop-up Card */}
       <View style={styles.card}>
-        <Text style={styles.headerText}>3 Carrier found</Text>
+        <Text style={styles.headerText}>
+          {carriers.length} Carrier{carriers.length === 1 ? "" : "s"} found
+        </Text>
         <Text style={styles.subText}>
           Please wait for a courier{"\n"}
           <Text style={styles.subText2}>to accept your package</Text>
@@ -129,16 +185,35 @@ const PeerCarrier = () => {
           <Text style={styles.timerText}>:</Text>
           <Text style={styles.timerText}>{time < 10 ? `0${time}` : time}</Text>
         </View>
-
         {/* Progress Bar */}
         <View style={styles.progressBar}>
           <View
             style={[
               styles.progressFill,
-              { width: `${((60 - time) / 60) * 100}%` },
+              { width: `${((30 - time) / 30) * 100}%` },
             ]}
           />
         </View>
+        {/* Retry Button */}
+        {showRetry && (
+          <TouchableOpacity
+            style={{
+              marginTop: 24,
+              backgroundColor: "#0DB760",
+              paddingVertical: 12,
+              paddingHorizontal: 32,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              setTime(30);
+              setShowRetry(false);
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

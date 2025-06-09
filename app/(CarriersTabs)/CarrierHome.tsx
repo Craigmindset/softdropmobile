@@ -7,10 +7,11 @@ import {
 } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -37,8 +38,43 @@ const CarrierHome = () => {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(
+    null
+  );
 
   const router = useRouter();
+
+  // Update is_online in carrier_profile table
+  const updateOnlineStatus = async (online: boolean) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      let updateData: any = { is_online: online };
+      if (online) {
+        // Get location only when going online
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const location = await Location.getCurrentPositionAsync({});
+          updateData.latitude = location.coords.latitude;
+          updateData.longitude = location.coords.longitude;
+        }
+      }
+      await supabase
+        .from("carrier_profile")
+        .update(updateData)
+        .eq("user_id", user.id);
+    }
+  };
+
+  // Handler for toggle
+  const handleToggleOnline = async () => {
+    setIsOnline((prev) => {
+      const newStatus = !prev;
+      updateOnlineStatus(newStatus);
+      return newStatus;
+    });
+  };
 
   // Fetch profile image and name on mount and refresh
   const fetchProfileData = async () => {
@@ -139,6 +175,53 @@ const CarrierHome = () => {
     setRefreshing(false);
   };
 
+  useEffect(() => {
+    const startWatching = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 10000, // every 10 seconds
+            distanceInterval: 20, // or every 20 meters
+          },
+          async (location) => {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (user) {
+              await supabase
+                .from("carrier_profile")
+                .update({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                })
+                .eq("user_id", user.id);
+            }
+          }
+        );
+      }
+    };
+
+    if (isOnline) {
+      startWatching();
+    } else {
+      // Stop watching when offline
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+    };
+  }, [isOnline]);
+
   return (
     <>
       <StatusBar style="light" backgroundColor={HEADER_BG} translucent={true} />
@@ -151,7 +234,7 @@ const CarrierHome = () => {
               paddingTop:
                 (Platform.OS === "android"
                   ? RNStatusBar.currentHeight || 24
-                  : 44) + 12, // <-- add extra 12px padding
+                  : 44) + 12,
             },
           ]}
         >
@@ -175,7 +258,7 @@ const CarrierHome = () => {
             {/* Online/Offline Toggle */}
             <TouchableOpacity
               style={styles.toggleContainer}
-              onPress={() => setIsOnline((prev) => !prev)}
+              onPress={handleToggleOnline}
               activeOpacity={0.7}
             >
               <View
@@ -183,9 +266,9 @@ const CarrierHome = () => {
                   styles.statusDot,
                   isOnline
                     ? {
-                        backgroundColor: blink ? "#00FF00" : "#00FF0080", // Blinking green
+                        backgroundColor: blink ? "#00FF00" : "#00FF0080",
                       }
-                    : { backgroundColor: "#FF2D2D" }, // Solid red
+                    : { backgroundColor: "#FF2D2D" },
                 ]}
               />
               <Text style={styles.toggleText}>

@@ -4,14 +4,18 @@ import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import LottieView from "lottie-react-native";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  BackHandler,
   Image,
+  Modal,
   Platform,
   RefreshControl,
   StatusBar as RNStatusBar,
@@ -33,6 +37,11 @@ const Home = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [userShortCode, setUserShortCode] = useState<string | null>(null);
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [backPressCount, setBackPressCount] = useState(0);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeChecked, setWelcomeChecked] = useState(false);
+  const backPressTimer = useRef<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,6 +67,12 @@ const Home = () => {
         setProfileImage(data.profile_image_url || null);
         setFirstName(data.first_name || null);
       }
+      // Check if welcome modal has been shown for this user
+      const flag = await AsyncStorage.getItem(`welcomeModalShown:${user.id}`);
+      if (!flag) {
+        setShowWelcomeModal(true);
+      }
+      setWelcomeChecked(true);
     }
   };
 
@@ -72,8 +87,115 @@ const Home = () => {
     setRefreshing(false);
   };
 
+  useEffect(() => {
+    const onBackPress = () => {
+      if (backPressCount === 0) {
+        setBackPressCount(1);
+        if (Platform.OS === "android") {
+          ToastAndroid.show("Click twice to exit", ToastAndroid.SHORT);
+        }
+        if (backPressTimer.current) clearTimeout(backPressTimer.current);
+        backPressTimer.current = setTimeout(
+          () => setBackPressCount(0),
+          2000
+        ) as unknown as number;
+        return true;
+      } else {
+        BackHandler.exitApp();
+        return true;
+      }
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => {
+      sub.remove();
+      if (backPressTimer.current) clearTimeout(backPressTimer.current);
+    };
+  }, [backPressCount]);
+
+  // Welcome modal dismiss handler
+  const handleWelcomeContinue = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await AsyncStorage.setItem(`welcomeModalShown:${user.id}`, "1");
+    }
+    setShowWelcomeModal(false);
+  };
+
   return (
     <>
+      {/* Welcome Modal */}
+      <Modal
+        visible={showWelcomeModal && welcomeChecked}
+        transparent
+        animationType="fade"
+        onRequestClose={handleWelcomeContinue}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.7)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 20,
+              padding: 30,
+              alignItems: "center",
+              width: 320,
+            }}
+          >
+            <LottieView
+              source={require("../../assets/images/smiles.json")}
+              autoPlay
+              loop={false}
+              style={{ width: 120, height: 120 }}
+            />
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "bold",
+                marginTop: 20,
+                color: "#0B4D1C",
+              }}
+            >
+              Welcome to SoftDrop!
+            </Text>
+            <Text
+              style={{
+                fontSize: 16,
+                color: "#333",
+                marginTop: 10,
+                textAlign: "center",
+              }}
+            >
+              {" "}
+              Making every Move Count
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleWelcomeContinue}
+              style={{
+                marginTop: 24,
+                backgroundColor: "#0B4D1C",
+                borderRadius: 10,
+                paddingVertical: 10,
+                paddingHorizontal: 40,
+              }}
+            >
+              <Text
+                style={{ color: "white", fontWeight: "bold", fontSize: 16 }}
+              >
+                Continue
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <StatusBar style="light" backgroundColor={HEADER_BG} translucent={true} />
       <SafeAreaView style={{ flex: 1, backgroundColor: HEADER_BG }}>
         <View
