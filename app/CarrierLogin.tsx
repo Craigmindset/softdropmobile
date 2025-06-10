@@ -117,6 +117,7 @@ const CarrierLogin = () => {
             <TextInput
               style={styles.input}
               placeholder="08xxxxxxxxx"
+              placeholderTextColor="#222"
               keyboardType="phone-pad"
               value={phoneNumber}
               onChangeText={handlePhoneNumberChange}
@@ -129,6 +130,7 @@ const CarrierLogin = () => {
             <TextInput
               style={styles.input}
               placeholder="******"
+              placeholderTextColor="#222"
               secureTextEntry={!showPassword}
               value={password}
               onChangeText={handlePasswordChange}

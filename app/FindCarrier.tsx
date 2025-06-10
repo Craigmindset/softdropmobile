@@ -15,6 +15,8 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -286,403 +288,298 @@ const FindCarrier = () => {
         <AntDesign name="arrowleft" size={24} color="#fff" />
       </TouchableOpacity>
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 48 }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
       >
-        {/* Map Section */}
-        <View style={styles.mapWrapper}>
-          <MapView
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            region={region || undefined}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-            loadingEnabled={true}
-            userInterfaceStyle="dark"
-            // Add your Google Maps API key in app.json or AndroidManifest.xml for production
-          >
-            {location && (
-              <Marker
-                coordinate={{
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                }}
-                title="You are here"
-              />
-            )}
-          </MapView>
-        </View>
-
-        {/* Form Container */}
-        <View style={styles.formContainer}>
-          {/* drawer handle */}
-          <View
-            style={{
-              alignSelf: "center",
-              width: 48,
-              height: 6,
-              backgroundColor: "#ececec",
-              borderRadius: 3,
-              marginBottom: 16,
-              opacity: 0.8,
-            }}
-          />
-          <View
-            style={{
-              marginTop: 8,
-              marginBottom: 16,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 18,
-                fontWeight: "bold",
-                textAlign: "center",
-              }}
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 48 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Map Section */}
+          <View style={styles.mapWrapper}>
+            <MapView
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              region={region || undefined}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+              loadingEnabled={true}
+              userInterfaceStyle="dark"
+              // Add your Google Maps API key in app.json or AndroidManifest.xml for production
             >
-              Find your choosen route
-            </Text>
-          </View>
-          {/* Route Tabs */}
-          <View style={styles.routeTabs}>
-            <TouchableOpacity
-              style={isInterState ? styles.inactiveTab : styles.activeTab}
-              onPress={() => setIsInterState(false)}
-            >
-              <Entypo
-                name="location-pin"
-                size={30}
-                color={isInterState ? "#999" : "#27ae60"}
-              />
-              <Text
-                style={
-                  isInterState ? styles.inactiveTabText : styles.activeTabText
-                }
-              >
-                Intra-City
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={isInterState ? styles.activeTab : styles.inactiveTab}
-              onPress={() => setIsInterState(true)}
-            >
-              <MaterialIcons
-                name="map"
-                size={30}
-                color={isInterState ? "#27ae60" : "#999"}
-              />
-              <Text
-                style={
-                  isInterState ? styles.activeTabText : styles.inactiveTabText
-                }
-              >
-                Inter-State
-              </Text>
-            </TouchableOpacity>
-            <View style={[styles.inactiveTab, { position: "relative" }]}>
-              <FontAwesome5 name="globe" size={30} color="#999" />
-              <Text style={styles.inactiveTabText}>International</Text>
-              {/* Coming Soon Badge */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: -8,
-                  right: -16,
-                  backgroundColor: "#e67e22",
-                  borderRadius: 8,
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                }}
-              >
-                <Text
-                  style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}
-                >
-                  Coming Soon
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            {/* Item Type Dropdown */}
-            <Text style={styles.label}>
-              What type of item do you want to send?
-            </Text>
-            <View style={{ position: "relative" }}>
-              <TouchableOpacity
-                activeOpacity={1}
-                onPress={() => setDropdownVisible((v) => !v)}
-                style={[
-                  styles.input,
-                  {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  },
-                ]}
-              >
-                <Text style={{ color: itemType ? "#fff" : "#777" }}>
-                  {itemType || "Select item type"}
-                </Text>
-                <AntDesign
-                  name={dropdownVisible ? "up" : "down"}
-                  size={18}
-                  color="#777"
-                />
-              </TouchableOpacity>
-              {dropdownVisible && (
-                <View style={styles.dropdown}>
-                  {itemOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setItemType(option);
-                        setDropdownVisible(false);
-                      }}
-                    >
-                      <Text style={{ color: "#fff" }}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Quantity and Insurance Section */}
-          <View style={styles.rowBetween}>
-            <View style={styles.column}>
-              <Text style={styles.label}>Quantity</Text>
-              <View style={styles.quantityRow}>
-                <TouchableOpacity
-                  style={styles.minusButton}
-                  onPress={() => setQuantity((q) => Math.max(0, q - 1))}
-                >
-                  <AntDesign name="minus" size={20} color="#fff" />
-                </TouchableOpacity>
-                <View style={styles.quantityBox}>
-                  <Text style={styles.quantityText}>{quantity}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.plusButton}
-                  onPress={() => setQuantity(quantity + 1)}
-                >
-                  <AntDesign name="plus" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.column}>
-              <Text style={styles.label}>Insure item?</Text>
-              <View style={styles.insuranceRow}>
-                <Text style={styles.insuranceLabel}>No</Text>
-                <Switch
-                  value={insurance}
-                  onValueChange={(val) => {
-                    setInsurance(val);
-                    if (val) {
-                      Alert.alert(
-                        "Premium Insurance",
-                        "Your item is now premiumly insured. This will impact your estimated cost."
-                      );
-                    }
+              {location && (
+                <Marker
+                  coordinate={{
+                    latitude: location.latitude,
+                    longitude: location.longitude,
                   }}
-                  thumbColor="#fff"
-                  trackColor={{ false: "#444", true: "#27ae60" }}
+                  title="You are here"
                 />
-                <Text style={styles.insuranceLabel}>Yes</Text>
-              </View>
-            </View>
+              )}
+            </MapView>
           </View>
 
-          {/* Image Upload Section */}
-          <Text style={[styles.label, { marginTop: 20 }]}>
-            Upload Image of Item
-          </Text>
-          <View style={styles.imageRow}>
-            {[0, 1].map((idx) => (
-              <View key={idx} style={{ position: "relative" }}>
-                <TouchableOpacity
-                  style={[
-                    styles.imageUpload,
-                    images[idx] && { borderColor: "#27ae60", borderWidth: 2 },
-                  ]}
-                  onPress={() => handlePickImage(idx)}
-                  activeOpacity={images[idx] ? 1 : 0.7}
-                >
-                  {images[idx] ? (
-                    <Image
-                      source={{ uri: images[idx] }}
-                      style={{ width: 56, height: 56, borderRadius: 6 }}
-                    />
-                  ) : (
-                    <Text style={styles.uploadText}>+</Text>
-                  )}
-                </TouchableOpacity>
-                {images[idx] && (
-                  <TouchableOpacity
-                    style={styles.deleteIcon}
-                    onPress={() => {
-                      // Remove the image from the array
-                      const newImages = [...images];
-                      newImages[idx] = null;
-                      setImages(newImages);
-                    }}
-                  >
-                    <AntDesign name="closecircle" size={10} color="white" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
-
-          {/* Location Fields */}
-          <View
-            style={[styles.rowWithIcon, { marginTop: 16, marginBottom: 16 }]} // was 32, now 16
-          >
-            {/* Increased marginTop for more spacing */}
-            <TouchableOpacity
-              onPress={async () => {
-                if (location) {
-                  const address = await getAddressFromCoords(location);
-                  setSenderLocation(address);
-                } else {
-                  Alert.alert(
-                    "Location not available",
-                    "Unable to get your current location."
-                  );
-                }
-              }}
-              activeOpacity={0.7}
-              style={{ flexDirection: "row", alignItems: "center" }}
-            >
-              <Ionicons name="location" size={18} color="#27ae60" />
-              <Text style={styles.useLocation}>Use my location</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{ marginBottom: 12, position: "relative" }}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter sender location"
-              placeholderTextColor="#777"
-              value={senderLocation}
-              onChangeText={setSenderLocation}
-            />
-            {senderLocation.length > 0 && (
-              <TouchableOpacity
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: 0,
-                  bottom: 0,
-                  height: "100%",
-                  justifyContent: "center",
-                  zIndex: 10,
-                  padding: 4,
-                }}
-                onPress={() => setSenderLocation("")}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <AntDesign
-                  name="closecircle"
-                  size={20}
-                  color="rgba(187,187,187,0.7)"
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={{ position: "relative" }}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter receiver location"
-              placeholderTextColor="#777"
-              value={receiverLocation}
-              onChangeText={setReceiverLocation}
-            />
-            {receiverLocation.length > 0 && (
-              <TouchableOpacity
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: 0,
-                  bottom: 0,
-                  height: "100%",
-                  justifyContent: "center",
-                  zIndex: 10,
-                  padding: 4,
-                }}
-                onPress={() => setReceiverLocation("")}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <AntDesign
-                  name="closecircle"
-                  size={20}
-                  color="rgba(187,187,187,0.7)"
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Receiver Details */}
-          <View style={{ marginTop: 24 }}>
-            {/* was 40, now 24 */}
-            {/* Divider with text */}
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* drawer handle */}
             <View
               style={{
-                flexDirection: "row",
+                alignSelf: "center",
+                width: 48,
+                height: 6,
+                backgroundColor: "#ececec",
+                borderRadius: 3,
+                marginBottom: 16,
+                opacity: 0.8,
+              }}
+            />
+            <View
+              style={{
+                marginTop: 8,
+                marginBottom: 16,
                 alignItems: "center",
-                marginBottom: 18,
+                justifyContent: "center",
               }}
             >
-              <View style={{ flex: 1, height: 1, backgroundColor: "#333" }} />
               <Text
                 style={{
                   color: "#fff",
-                  marginHorizontal: 12,
-                  fontSize: 13,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  textAlign: "center",
                 }}
               >
-                Enter Receivers Details
+                Find your choosen route
               </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: "#333" }} />
             </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter receiver’s name"
-              placeholderTextColor="#777"
-              value={receiverName}
-              onChangeText={setReceiverName}
-            />
-            <View style={{ position: "relative" }}>
+            {/* Route Tabs */}
+            <View style={styles.routeTabs}>
+              <TouchableOpacity
+                style={isInterState ? styles.inactiveTab : styles.activeTab}
+                onPress={() => setIsInterState(false)}
+              >
+                <Entypo
+                  name="location-pin"
+                  size={30}
+                  color={isInterState ? "#999" : "#27ae60"}
+                />
+                <Text
+                  style={
+                    isInterState ? styles.inactiveTabText : styles.activeTabText
+                  }
+                >
+                  Intra-City
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={isInterState ? styles.activeTab : styles.inactiveTab}
+                onPress={() => setIsInterState(true)}
+              >
+                <MaterialIcons
+                  name="map"
+                  size={30}
+                  color={isInterState ? "#27ae60" : "#999"}
+                />
+                <Text
+                  style={
+                    isInterState ? styles.activeTabText : styles.inactiveTabText
+                  }
+                >
+                  Inter-State
+                </Text>
+              </TouchableOpacity>
+              <View style={[styles.inactiveTab, { position: "relative" }]}>
+                <FontAwesome5 name="globe" size={30} color="#999" />
+                <Text style={styles.inactiveTabText}>International</Text>
+                {/* Coming Soon Badge */}
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -8,
+                    right: -16,
+                    backgroundColor: "#e67e22",
+                    borderRadius: 8,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontSize: 10, fontWeight: "bold" }}
+                  >
+                    Coming Soon
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 20 }}>
+              {/* Item Type Dropdown */}
+              <Text style={styles.label}>
+                What type of item do you want to send?
+              </Text>
+              <View style={{ position: "relative" }}>
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => setDropdownVisible((v) => !v)}
+                  style={[
+                    styles.input,
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    },
+                  ]}
+                >
+                  <Text style={{ color: itemType ? "#fff" : "#777" }}>
+                    {itemType || "Select item type"}
+                  </Text>
+                  <AntDesign
+                    name={dropdownVisible ? "up" : "down"}
+                    size={18}
+                    color="#777"
+                  />
+                </TouchableOpacity>
+                {dropdownVisible && (
+                  <View style={styles.dropdown}>
+                    {itemOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setItemType(option);
+                          setDropdownVisible(false);
+                        }}
+                      >
+                        <Text style={{ color: "#fff" }}>{option}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Quantity and Insurance Section */}
+            <View style={styles.rowBetween}>
+              <View style={styles.column}>
+                <Text style={styles.label}>Quantity</Text>
+                <View style={styles.quantityRow}>
+                  <TouchableOpacity
+                    style={styles.minusButton}
+                    onPress={() => setQuantity((q) => Math.max(0, q - 1))}
+                  >
+                    <AntDesign name="minus" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <View style={styles.quantityBox}>
+                    <Text style={styles.quantityText}>{quantity}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.plusButton}
+                    onPress={() => setQuantity(quantity + 1)}
+                  >
+                    <AntDesign name="plus" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={styles.column}>
+                <Text style={styles.label}>Insure item?</Text>
+                <View style={styles.insuranceRow}>
+                  <Text style={styles.insuranceLabel}>No</Text>
+                  <Switch
+                    value={insurance}
+                    onValueChange={(val) => {
+                      setInsurance(val);
+                      if (val) {
+                        Alert.alert(
+                          "Premium Insurance",
+                          "Your item is now premiumly insured. This will impact your estimated cost."
+                        );
+                      }
+                    }}
+                    thumbColor="#fff"
+                    trackColor={{ false: "#444", true: "#27ae60" }}
+                  />
+                  <Text style={styles.insuranceLabel}>Yes</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Image Upload Section */}
+            <Text style={[styles.label, { marginTop: 20 }]}>
+              Upload Image of Item
+            </Text>
+            <View style={styles.imageRow}>
+              {[0, 1].map((idx) => (
+                <View key={idx} style={{ position: "relative" }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.imageUpload,
+                      images[idx] && { borderColor: "#27ae60", borderWidth: 2 },
+                    ]}
+                    onPress={() => handlePickImage(idx)}
+                    activeOpacity={images[idx] ? 1 : 0.7}
+                  >
+                    {images[idx] ? (
+                      <Image
+                        source={{ uri: images[idx] }}
+                        style={{ width: 56, height: 56, borderRadius: 6 }}
+                      />
+                    ) : (
+                      <Text style={styles.uploadText}>+</Text>
+                    )}
+                  </TouchableOpacity>
+                  {images[idx] && (
+                    <TouchableOpacity
+                      style={styles.deleteIcon}
+                      onPress={() => {
+                        // Remove the image from the array
+                        const newImages = [...images];
+                        newImages[idx] = null;
+                        setImages(newImages);
+                      }}
+                    >
+                      <AntDesign name="closecircle" size={10} color="white" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            {/* Location Fields */}
+            <View
+              style={[styles.rowWithIcon, { marginTop: 16, marginBottom: 16 }]} // was 32, now 16
+            >
+              {/* Increased marginTop for more spacing */}
+              <TouchableOpacity
+                onPress={async () => {
+                  if (location) {
+                    const address = await getAddressFromCoords(location);
+                    setSenderLocation(address);
+                  } else {
+                    Alert.alert(
+                      "Location not available",
+                      "Unable to get your current location."
+                    );
+                  }
+                }}
+                activeOpacity={0.7}
+                style={{ flexDirection: "row", alignItems: "center" }}
+              >
+                <Ionicons name="location" size={18} color="#27ae60" />
+                <Text style={styles.useLocation}>Use my location</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ marginBottom: 12, position: "relative" }}>
               <TextInput
                 style={styles.input}
-                placeholder="Enter receiver’s contact"
+                placeholder="Enter sender location"
                 placeholderTextColor="#777"
-                keyboardType="phone-pad"
-                value={receiverContact}
-                onChangeText={setReceiverContact}
+                value={senderLocation}
+                onChangeText={setSenderLocation}
               />
-              {/* Phone icon aligned right */}
-              <TouchableOpacity
-                style={{
-                  position: "absolute",
-                  right: 29, // place it just before the clear icon
-                  top: 0,
-                  bottom: 0,
-                  height: "100%",
-                  justifyContent: "center",
-                  zIndex: 10,
-                  padding: 4,
-                }}
-                onPress={handlePickContact}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MaterialIcons name="phone" size={20} color="#f5f5f5" />
-              </TouchableOpacity>
-              {receiverContact.length > 0 && (
+              {senderLocation.length > 0 && (
                 <TouchableOpacity
                   style={{
                     position: "absolute",
@@ -694,7 +591,7 @@ const FindCarrier = () => {
                     zIndex: 10,
                     padding: 4,
                   }}
-                  onPress={() => setReceiverContact("")}
+                  onPress={() => setSenderLocation("")}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <AntDesign
@@ -705,108 +602,220 @@ const FindCarrier = () => {
                 </TouchableOpacity>
               )}
             </View>
-          </View>
+            <View style={{ position: "relative" }}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter receiver location"
+                placeholderTextColor="#777"
+                value={receiverLocation}
+                onChangeText={setReceiverLocation}
+              />
+              {receiverLocation.length > 0 && (
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    top: 0,
+                    bottom: 0,
+                    height: "100%",
+                    justifyContent: "center",
+                    zIndex: 10,
+                    padding: 4,
+                  }}
+                  onPress={() => setReceiverLocation("")}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <AntDesign
+                    name="closecircle"
+                    size={20}
+                    color="rgba(187,187,187,0.7)"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
 
-          {/* Delivery Method Section - Conditionally Rendered */}
-          {isInterState && (
-            <View
-              style={{
-                marginBottom: 20,
-                backgroundColor: "#23272f",
-                borderRadius: 10,
-                padding: 16,
-                marginTop: 4,
-              }}
-            >
-              <Text
-                style={{
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  marginBottom: 12,
-                  color: "#fff",
-                }}
-              >
-                Select Delivery Method
-              </Text>
+            {/* Receiver Details */}
+            <View style={{ marginTop: 24 }}>
+              {/* was 40, now 24 */}
+              {/* Divider with text */}
               <View
                 style={{
                   flexDirection: "row",
-                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 18,
                 }}
               >
-                {/* Upon Arrival Button */}
+                <View style={{ flex: 1, height: 1, backgroundColor: "#333" }} />
+                <Text
+                  style={{
+                    color: "#fff",
+                    marginHorizontal: 12,
+                    fontSize: 13,
+                  }}
+                >
+                  Enter Receivers Details
+                </Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: "#333" }} />
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter receiver’s name"
+                placeholderTextColor="#777"
+                value={receiverName}
+                onChangeText={setReceiverName}
+              />
+              <View style={{ position: "relative" }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter receiver’s contact"
+                  placeholderTextColor="#777"
+                  keyboardType="phone-pad"
+                  value={receiverContact}
+                  onChangeText={setReceiverContact}
+                />
+                {/* Phone icon aligned right */}
                 <TouchableOpacity
                   style={{
-                    flex: 1,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor:
-                      deliveryMethod === "arrival" ? "#27ae60" : "#2c2f36",
-                    padding: 12,
-                    borderRadius: 8,
-                    marginRight: 8,
+                    position: "absolute",
+                    right: 29, // place it just before the clear icon
+                    top: 0,
+                    bottom: 0,
+                    height: "100%",
+                    justifyContent: "center",
+                    zIndex: 10,
+                    padding: 4,
                   }}
-                  onPress={() => setDeliveryMethod("arrival")}
-                  activeOpacity={0.8}
+                  onPress={handlePickContact}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <MaterialIcons
-                    name="location-on"
-                    size={20}
-                    color={deliveryMethod === "arrival" ? "#fff" : "#aaa"}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    style={{
-                      color: deliveryMethod === "arrival" ? "#fff" : "#ccc",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Upon arrival
-                  </Text>
+                  <MaterialIcons name="phone" size={20} color="#f5f5f5" />
                 </TouchableOpacity>
-                {/* Home Delivery Button */}
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor:
-                      deliveryMethod === "home" ? "#27ae60" : "#2c2f36",
-                    padding: 12,
-                    borderRadius: 8,
-                    marginLeft: 8,
-                  }}
-                  onPress={() => setDeliveryMethod("home")}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons
-                    name="home"
-                    size={20}
-                    color={deliveryMethod === "home" ? "#fff" : "#aaa"}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
+                {receiverContact.length > 0 && (
+                  <TouchableOpacity
                     style={{
-                      color: deliveryMethod === "home" ? "#fff" : "#ccc",
-                      fontWeight: "bold",
+                      position: "absolute",
+                      right: 12,
+                      top: 0,
+                      bottom: 0,
+                      height: "100%",
+                      justifyContent: "center",
+                      zIndex: 10,
+                      padding: 4,
                     }}
+                    onPress={() => setReceiverContact("")}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    Home Delivery
-                  </Text>
-                </TouchableOpacity>
+                    <AntDesign
+                      name="closecircle"
+                      size={20}
+                      color="rgba(187,187,187,0.7)"
+                    />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
-          )}
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.button, { marginTop: 32 }]}
-            onPress={handleSubmitDeliveryRequest}
-          >
-            <Text style={styles.buttonText}>Find a Carrier</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            {/* Delivery Method Section - Conditionally Rendered */}
+            {isInterState && (
+              <View
+                style={{
+                  marginBottom: 20,
+                  backgroundColor: "#23272f",
+                  borderRadius: 10,
+                  padding: 16,
+                  marginTop: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontWeight: "bold",
+                    fontSize: 16,
+                    marginBottom: 12,
+                    color: "#fff",
+                  }}
+                >
+                  Select Delivery Method
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  {/* Upon Arrival Button */}
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor:
+                        deliveryMethod === "arrival" ? "#27ae60" : "#2c2f36",
+                      padding: 12,
+                      borderRadius: 8,
+                      marginRight: 8,
+                    }}
+                    onPress={() => setDeliveryMethod("arrival")}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons
+                      name="location-on"
+                      size={20}
+                      color={deliveryMethod === "arrival" ? "#fff" : "#aaa"}
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text
+                      style={{
+                        color: deliveryMethod === "arrival" ? "#fff" : "#ccc",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Upon arrival
+                    </Text>
+                  </TouchableOpacity>
+                  {/* Home Delivery Button */}
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor:
+                        deliveryMethod === "home" ? "#27ae60" : "#2c2f36",
+                      padding: 12,
+                      borderRadius: 8,
+                      marginLeft: 8,
+                    }}
+                    onPress={() => setDeliveryMethod("home")}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons
+                      name="home"
+                      size={20}
+                      color={deliveryMethod === "home" ? "#fff" : "#aaa"}
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text
+                      style={{
+                        color: deliveryMethod === "home" ? "#fff" : "#ccc",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Home Delivery
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.button, { marginTop: 32 }]}
+              onPress={handleSubmitDeliveryRequest}
+            >
+              <Text style={styles.buttonText}>Find a Carrier</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 };

@@ -69,11 +69,166 @@ const CarrierHome = () => {
 
   // Handler for toggle
   const handleToggleOnline = async () => {
-    setIsOnline((prev) => {
-      const newStatus = !prev;
-      updateOnlineStatus(newStatus);
-      return newStatus;
+    console.log(
+      "[CarrierHome] Toggle button pressed. Current isOnline:",
+      isOnline
+    );
+    const newStatus = !isOnline;
+    console.log("[CarrierHome] handleToggleOnline called");
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    console.log("[CarrierHome] supabase.auth.getUser result:", {
+      user,
+      userError,
     });
+    if (!user) {
+      console.warn("[CarrierHome] No user found, aborting toggle.");
+      return;
+    }
+    let updateData: any = { is_online: newStatus };
+    if (newStatus) {
+      // Get location only when going online
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log("[CarrierHome] Location permission status:", status);
+      if (status === "granted") {
+        try {
+          const location = await Promise.race([
+            Location.getCurrentPositionAsync({}),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Location timeout")), 8000)
+            ),
+          ]);
+          updateData.latitude = location.coords.latitude;
+          updateData.longitude = location.coords.longitude;
+          console.log("[CarrierHome] Got location:", updateData);
+        } catch (locError) {
+          console.error("[CarrierHome] Error getting location:", locError);
+          // Removed Alert.alert("Location error", String(locError));
+          // Optionally, return here or continue without location
+        }
+      }
+    }
+    try {
+      console.log(
+        "[CarrierHome] About to update carrier_profile with:",
+        updateData
+      );
+      let updateResult;
+      try {
+        updateResult = await supabase
+          .from("carrier_profile")
+          .update(updateData, { count: "exact" })
+          .eq("user_id", user.id)
+          .select();
+        console.log("[CarrierHome] Update result:", updateResult);
+      } catch (updateError) {
+        console.error(
+          "[CarrierHome] Error during supabase update:",
+          updateError
+        );
+        // Alert.alert("Update error", String(updateError));
+        return;
+      }
+      const { data, error, count } = updateResult;
+      if (!error) {
+        if (count === 0) {
+          // Check if row actually exists before insert
+          const { data: existing, error: selectError } = await supabase
+            .from("carrier_profile")
+            .select("user_id")
+            .eq("user_id", user.id)
+            .single();
+          if (selectError) {
+            console.error("[CarrierHome] Select error:", selectError);
+            // Only insert if select error is 'no rows' (PGRST116)
+            if (selectError.code !== "PGRST116") {
+              // RLS or other error, do not insert, just log and stop
+              return;
+            }
+          }
+          if (existing) {
+            // Row exists, try update again (may be RLS or race condition)
+            const { error: updateAgainError } = await supabase
+              .from("carrier_profile")
+              .update(updateData)
+              .eq("user_id", user.id);
+            if (!updateAgainError) {
+              setIsOnline(newStatus);
+              Alert.alert("Status updated", "Your online status was updated.");
+            } else {
+              console.error(
+                "[CarrierHome] Update again error:",
+                updateAgainError
+              );
+            }
+            return;
+          }
+          // Only reach here if selectError.code === 'PGRST116' (no rows)
+          const insertPayload: any = {
+            user_id: user.id,
+            phone: user.phone || "",
+            first_name: user.user_metadata?.first_name || "Unknown",
+            last_name: user.user_metadata?.last_name || "Unknown",
+            email: user.email || "",
+            carrier_type: "Carrier",
+            is_online: newStatus,
+          };
+          if (updateData.latitude) insertPayload.latitude = updateData.latitude;
+          if (updateData.longitude)
+            insertPayload.longitude = updateData.longitude;
+          const { error: insertError } = await supabase
+            .from("carrier_profile")
+            .insert(insertPayload);
+          if (!insertError) {
+            Alert.alert(
+              "Profile created",
+              "A new carrier profile was created for you. Please try toggling again."
+            );
+          } else {
+            console.error("[CarrierHome] Insert error:", insertError);
+          }
+          return;
+        } else {
+          // Log the actual updated row
+          if (data && data.length > 0) {
+            console.log("[CarrierHome] Updated row:", data[0]);
+          }
+          console.log(
+            "[CarrierHome] DB update success, setting isOnline:",
+            newStatus
+          );
+          setIsOnline(newStatus);
+          console.log("[CarrierHome] setIsOnline called with:", newStatus);
+          // Fetch the row to confirm DB value
+          const { data: checkData, error: checkError } = await supabase
+            .from("carrier_profile")
+            .select("is_online")
+            .eq("user_id", user.id)
+            .single();
+          if (checkError)
+            console.error("[CarrierHome] Check error:", checkError);
+          if (checkData) {
+            console.log(
+              "[CarrierHome] DB is_online after update:",
+              checkData.is_online
+            );
+          } else {
+            console.warn(
+              "[CarrierHome] Could not fetch carrier_profile after update",
+              checkError
+            );
+          }
+        }
+      } else {
+        console.error("[CarrierHome] Failed to update online status", error);
+        // Alert.alert("Failed to update online status", error.message);
+      }
+    } catch (e) {
+      console.error("[CarrierHome] Unexpected error in handleToggleOnline:", e);
+      Alert.alert("Unexpected error", String(e));
+    }
   };
 
   // Fetch profile image and name on mount and refresh
@@ -154,7 +309,7 @@ const CarrierHome = () => {
         setProfileImage(publicUrl);
         // Save URL to Carrier_profile
         await supabase
-          .from("Carrier_profile")
+          .from("carrier_profile")
           .update({ profile_image_url: publicUrl })
           .eq("user_id", user.id);
         Alert.alert("Profile image updated!");
@@ -221,6 +376,49 @@ const CarrierHome = () => {
       }
     };
   }, [isOnline]);
+
+  useEffect(() => {
+    let subscription: any = null;
+    let userId: string | null = null;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        userId = user.id;
+        // Subscribe to changes for this user's carrier_profile
+        subscription = supabase
+          .channel("carrier_profile_changes_" + user.id)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "carrier_profile",
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              console.log("[CarrierHome] Realtime payload:", payload);
+              if (payload.eventType === "UPDATE" && payload.new) {
+                if (typeof payload.new.is_online === "boolean") {
+                  setIsOnline(payload.new.is_online);
+                  console.log(
+                    "[CarrierHome] Realtime setIsOnline called with:",
+                    payload.new.is_online
+                  );
+                }
+              }
+            }
+          )
+          .subscribe();
+      }
+    })();
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, [setIsOnline]);
 
   return (
     <>
