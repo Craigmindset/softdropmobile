@@ -1,5 +1,5 @@
 import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import {
@@ -22,6 +22,7 @@ const getRandomCoords = (
 });
 
 const PeerCarrier = () => {
+  const params = useLocalSearchParams();
   const [time, setTime] = useState(30); // Changed from 60 to 30
   const [carriers, setCarriers] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -31,31 +32,17 @@ const PeerCarrier = () => {
   // All markers centered around Ikeja, Toyin St, Opebi
   const center = { latitude: 6.6018, longitude: 3.3515 }; // Ikeja, Toyin St, Opebi
 
+  // Parse carriers from params on mount
   useEffect(() => {
-    // Fetch available carriers from Supabase
-    async function fetchCarriers() {
-      const { data, error } = await supabase
-        .from("carrier_profile")
-        .select(
-          "user_id, first_name, last_name, profile_image_url, latitude, longitude, carrier_type, is_online"
-        )
-        .limit(20);
-      if (!error && data) {
-        // Only show carriers who are online and have valid lat/lng
-        setCarriers(
-          data.filter(
-            (carrier) =>
-              (carrier.is_online === undefined || carrier.is_online === true) &&
-              typeof carrier.latitude === "number" &&
-              typeof carrier.longitude === "number"
-          )
-        );
+    if (params.carriers) {
+      try {
+        const parsed = JSON.parse(params.carriers as string);
+        setCarriers(parsed);
+      } catch (e) {
+        setCarriers([]);
       }
     }
-    fetchCarriers();
-    const interval = setInterval(fetchCarriers, 5000); // Poll every 5 seconds
-    return () => clearInterval(interval);
-  }, []);
+  }, [params.carriers]);
 
   useEffect(() => {
     // Fetch current user id
