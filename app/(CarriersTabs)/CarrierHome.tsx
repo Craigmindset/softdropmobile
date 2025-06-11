@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Platform,
@@ -38,6 +39,7 @@ const CarrierHome = () => {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [toggleLoading, setToggleLoading] = useState(false); // <-- Add loading state
   const locationSubscription = useRef<Location.LocationSubscription | null>(
     null
   );
@@ -69,52 +71,49 @@ const CarrierHome = () => {
 
   // Handler for toggle
   const handleToggleOnline = async () => {
-    console.log(
-      "[CarrierHome] Toggle button pressed. Current isOnline:",
-      isOnline
-    );
-    const newStatus = !isOnline;
-    console.log("[CarrierHome] handleToggleOnline called");
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    console.log("[CarrierHome] supabase.auth.getUser result:", {
-      user,
-      userError,
-    });
-    if (!user) {
-      console.warn("[CarrierHome] No user found, aborting toggle.");
-      return;
-    }
-    let updateData: any = { is_online: newStatus };
-    if (newStatus) {
-      // Get location only when going online
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      console.log("[CarrierHome] Location permission status:", status);
-      if (status === "granted") {
-        try {
-          const location = await Promise.race([
-            Location.getCurrentPositionAsync({}),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Location timeout")), 8000)
-            ),
-          ]);
-          updateData.latitude = location.coords.latitude;
-          updateData.longitude = location.coords.longitude;
-          console.log("[CarrierHome] Got location:", updateData);
-        } catch (locError) {
-          console.error("[CarrierHome] Error getting location:", locError);
-          // Removed Alert.alert("Location error", String(locError));
-          // Optionally, return here or continue without location
-        }
-      }
-    }
+    setToggleLoading(true); // <-- Start loading
     try {
       console.log(
-        "[CarrierHome] About to update carrier_profile with:",
-        updateData
+        "[CarrierHome] Toggle button pressed. Current isOnline:",
+        isOnline
       );
+      const newStatus = !isOnline;
+      console.log("[CarrierHome] handleToggleOnline called");
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      console.log("[CarrierHome] supabase.auth.getUser result:", {
+        user,
+        userError,
+      });
+      if (!user) {
+        console.warn("[CarrierHome] No user found, aborting toggle.");
+        setToggleLoading(false); // <-- Stop loading on early return
+        return;
+      }
+      let updateData: any = { is_online: newStatus };
+      if (newStatus) {
+        // Get location only when going online
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        console.log("[CarrierHome] Location permission status:", status);
+        if (status === "granted") {
+          try {
+            const location = await Promise.race([
+              Location.getCurrentPositionAsync({}),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Location timeout")), 8000)
+              ),
+            ]) as Location.LocationObject; // <-- Cast to correct type
+            updateData.latitude = location.coords.latitude;
+            updateData.longitude = location.coords.longitude;
+            console.log("[CarrierHome] Got location:", updateData);
+          } catch (locError) {
+            console.error("[CarrierHome] Error getting location:", locError);
+            // Optionally, return here or continue without location
+          }
+        }
+      }
       let updateResult;
       try {
         updateResult = await supabase
@@ -122,13 +121,12 @@ const CarrierHome = () => {
           .update(updateData, { count: "exact" })
           .eq("user_id", user.id)
           .select();
-        console.log("[CarrierHome] Update result:", updateResult);
       } catch (updateError) {
         console.error(
           "[CarrierHome] Error during supabase update:",
           updateError
         );
-        // Alert.alert("Update error", String(updateError));
+        setToggleLoading(false);
         return;
       }
       const { data, error, count } = updateResult;
@@ -145,6 +143,7 @@ const CarrierHome = () => {
             // Only insert if select error is 'no rows' (PGRST116)
             if (selectError.code !== "PGRST116") {
               // RLS or other error, do not insert, just log and stop
+              setToggleLoading(false);
               return;
             }
           }
@@ -163,6 +162,7 @@ const CarrierHome = () => {
                 updateAgainError
               );
             }
+            setToggleLoading(false);
             return;
           }
           // Only reach here if selectError.code === 'PGRST116' (no rows)
@@ -189,6 +189,7 @@ const CarrierHome = () => {
           } else {
             console.error("[CarrierHome] Insert error:", insertError);
           }
+          setToggleLoading(false);
           return;
         } else {
           // Log the actual updated row
@@ -223,11 +224,12 @@ const CarrierHome = () => {
         }
       } else {
         console.error("[CarrierHome] Failed to update online status", error);
-        // Alert.alert("Failed to update online status", error.message);
       }
     } catch (e) {
       console.error("[CarrierHome] Unexpected error in handleToggleOnline:", e);
       Alert.alert("Unexpected error", String(e));
+    } finally {
+      setToggleLoading(false); // <-- Always stop loading
     }
   };
 
@@ -458,6 +460,7 @@ const CarrierHome = () => {
               style={styles.toggleContainer}
               onPress={handleToggleOnline}
               activeOpacity={0.7}
+              disabled={toggleLoading} // <-- Disable while loading
             >
               <View
                 style={[
@@ -469,9 +472,13 @@ const CarrierHome = () => {
                     : { backgroundColor: "#FF2D2D" },
                 ]}
               />
-              <Text style={styles.toggleText}>
-                {isOnline ? "You are Online" : "Gone Offline"}
-              </Text>
+              {toggleLoading ? (
+                <ActivityIndicator size="small" color="#fff" style={{ marginLeft: 5 }} />
+              ) : (
+                <Text style={styles.toggleText}>
+                  {isOnline ? "You are Online" : "Gone Offline"}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
           <View style={styles.headerIcons}>

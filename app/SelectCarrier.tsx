@@ -598,6 +598,78 @@ export default function SelectCarrierScreen() {
                     `[SelectCarrier] Found ${carriers.length} carriers for type: ${carrierType}`,
                     carriers
                   );
+                  // Insert a message into message_table with relevant delivery request parameters
+                  try {
+                    if (!params.sender_id) {
+                      alert(
+                        "Sender ID is missing. Cannot create delivery request."
+                      );
+                      console.error(
+                        "[SelectCarrier] sender_id is missing in params:",
+                        params
+                      );
+                      return;
+                    }
+                    const parsePrice = (priceStr: string) => {
+                      if (!priceStr) return null;
+                      // Remove currency symbol and commas, then parse as number
+                      return Number(String(priceStr).replace(/[^\d.]/g, ""));
+                    };
+                    // Helper to robustly convert param to boolean
+                    const toBool = (val: any) => {
+                      if (typeof val === "boolean") return val;
+                      if (typeof val === "string")
+                        return val === "true" || val === "1";
+                      return false;
+                    };
+                    // Robustly extract item_type
+                    let itemTypeParam = params.item_type || params.itemType;
+                    if (!itemTypeParam) {
+                      console.error(
+                        "[SelectCarrier] item_type missing in params:",
+                        params
+                      );
+                    }
+                    const messagePayload = {
+                      carrier_type: carrierType,
+                      sender_location:
+                        senderAddress ||
+                        senderMarker.latitude + "," + senderMarker.longitude,
+                      receiver_location:
+                        receiverAddress ||
+                        receiverMarker.latitude +
+                          "," +
+                          receiverMarker.longitude,
+                      price: parsePrice(modalCarrier.price),
+                      created_at: new Date().toISOString(),
+                      status: "pending",
+                      sender_id: params.sender_id,
+                      insurance: toBool(params.insurance),
+                      quantity: params.quantity ? Number(params.quantity) : 1,
+                      item_type: itemTypeParam || "Unknown",
+                      is_inter_state: toBool(params.is_inter_state),
+                      // Add any other required NOT NULL fields here
+                    };
+                    const { error: msgError } = await supabase
+                      .from("message_table")
+                      .insert([messagePayload]);
+                    if (msgError) {
+                      console.error(
+                        "[SelectCarrier] Failed to insert message_table:",
+                        msgError
+                      );
+                    } else {
+                      console.log(
+                        "[SelectCarrier] Inserted message into message_table:",
+                        messagePayload
+                      );
+                    }
+                  } catch (msgEx) {
+                    console.error(
+                      "[SelectCarrier] Exception inserting message_table:",
+                      msgEx
+                    );
+                  }
                   // Pass the found carriers to the next screen
                   router.push({
                     pathname: "/PeerCarrier",

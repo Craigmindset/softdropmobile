@@ -233,24 +233,42 @@ const FindCarrier = () => {
         return;
       }
       setLastSenderAddress(senderLocation); // Save the last used sender address
+      // Prepare params for navigation
+      const navParams = {
+        sender_latitude: location?.latitude
+          ? String(location.latitude)
+          : undefined,
+        sender_longitude: location?.longitude
+          ? String(location.longitude)
+          : undefined,
+        receiver_latitude: receiver_latitude
+          ? String(receiver_latitude)
+          : undefined,
+        receiver_longitude: receiver_longitude
+          ? String(receiver_longitude)
+          : undefined,
+        sender_location: senderLocation,
+        receiver_location: receiverLocation,
+        sender_id, // <-- Ensure sender_id is passed
+        item_type: itemType && itemType.trim() ? itemType : "Other", // <-- Always pass a non-empty value
+        quantity: String(quantity ?? 1), // <-- Always pass a value
+        insurance: String(insurance ?? false), // <-- Always pass a value
+        is_inter_state: String(isInterState ?? false), // <-- Always pass a value
+      };
+      if (!navParams.item_type || !navParams.item_type.trim()) {
+        console.warn(
+          "[FindCarrier] item_type missing or empty, defaulting to 'Other'. Params:",
+          navParams
+        );
+        navParams.item_type = "Other";
+      }
+      console.log(
+        "[FindCarrier] Navigating to SelectCarrier with params:",
+        navParams
+      );
       router.push({
         pathname: "/SelectCarrier",
-        params: {
-          sender_latitude: location?.latitude
-            ? String(location.latitude)
-            : undefined,
-          sender_longitude: location?.longitude
-            ? String(location.longitude)
-            : undefined,
-          receiver_latitude: receiver_latitude
-            ? String(receiver_latitude)
-            : undefined,
-          receiver_longitude: receiver_longitude
-            ? String(receiver_longitude)
-            : undefined,
-          sender_location: senderLocation,
-          receiver_location: receiverLocation,
-        },
+        params: navParams,
       }); // Navigate to SelectCarrier screen
     } catch (e: unknown) {
       if (e instanceof Error) {
