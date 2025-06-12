@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -19,6 +20,8 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from "react-native-maps";
 import { supabase } from "../lib/supabase";
 import { useDeliveryRequest } from "./DeliveryRequestContext";
+
+const bikeMarkerIcon = require("../assets/images/bike.png");
 
 // Helper to calculate distance between two lat/lng points (Haversine formula)
 function getDistanceFromLatLonInKm(
@@ -428,7 +431,10 @@ export default function SelectCarrierScreen() {
               title={carrier.first_name || "Carrier"}
             >
               {carrier.carrier_type === "Bike" ? (
-                <FontAwesome5 name="motorcycle" size={28} color="#000" />
+                <Image
+                  source={bikeMarkerIcon}
+                  style={{ width: 28, height: 28, resizeMode: "contain" }}
+                />
               ) : (
                 <FontAwesome5 name="bicycle" size={28} color="#0DB760" />
               )}

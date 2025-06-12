@@ -1,5 +1,6 @@
 import { AntDesign } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
@@ -133,6 +134,11 @@ const SenderLoginScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Blur background when modal is visible */}
+      {showSuccessModal ? (
+        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+      ) : null}
 
       {/* Back Icon */}
       <TouchableOpacity
