@@ -554,141 +554,73 @@ export default function SelectCarrierScreen() {
               onPress={async () => {
                 setModalVisible(false);
                 // Map card title to carrier_type explicitly
-                const cardTitleToType: Record<string, string> = {
+                const cardTitleToType = {
                   Carrier: "Carrier",
                   "Bicycle Carrier": "Bicycle",
                   "Bike Carrier": "Bike",
                   "Car Carrier": "Car",
                 };
-                // Use cardTitle if present, else fallback to modalCarrier.title
                 const cardTitle = modalCarrier.cardTitle || modalCarrier.title;
                 const carrierType = cardTitleToType[cardTitle] || "Carrier";
-                console.log(
-                  "[SelectCarrier] Selected carrierType:",
-                  carrierType,
-                  "from cardTitle:",
-                  cardTitle
-                );
                 try {
+                  // Find the first available online carrier of this type
                   const { data: carriers, error } = await supabase
                     .from("carrier_profile")
-                    .select("*")
+                    .select("user_id")
                     .eq("carrier_type", carrierType)
                     .eq("is_online", true);
-                  console.log("[SelectCarrier] Supabase raw data:", carriers);
                   if (error) {
-                    console.error("[SelectCarrier] Supabase error:", error);
                     alert(error.message || "Failed to find carriers");
                     return;
                   }
-                  // Extra: Log all online carrier types for debugging
-                  const { data: allOnline, error: onlineErr } = await supabase
-                    .from("carrier_profile")
-                    .select("carrier_type, user_id")
-                    .eq("is_online", true);
-                  if (!onlineErr && allOnline) {
-                    const types = allOnline.map((c) => c.carrier_type);
-                    console.log(
-                      "[SelectCarrier] All online carrier types:",
-                      types
-                    );
-                  }
                   if (!carriers || carriers.length === 0) {
-                    console.warn(
-                      `[SelectCarrier] No available carriers for type: ${carrierType}`
-                    );
                     alert(`No available carriers for type: ${carrierType}`);
                     return;
                   }
-                  console.log(
-                    `[SelectCarrier] Found ${carriers.length} carriers for type: ${carrierType}`,
-                    carriers
-                  );
-                  // Insert a message into message_table with relevant delivery request parameters
-                  try {
-                    if (!params.sender_id) {
-                      alert(
-                        "Sender ID is missing. Cannot create delivery request."
-                      );
-                      console.error(
-                        "[SelectCarrier] sender_id is missing in params:",
-                        params
-                      );
-                      return;
-                    }
-                    const parsePrice = (priceStr: string) => {
-                      if (!priceStr) return null;
-                      // Remove currency symbol and commas, then parse as number
-                      return Number(String(priceStr).replace(/[^\d.]/g, ""));
-                    };
-                    // Helper to robustly convert param to boolean
-                    const toBool = (val: any) => {
-                      if (typeof val === "boolean") return val;
-                      if (typeof val === "string")
-                        return val === "true" || val === "1";
-                      return false;
-                    };
-                    // Robustly extract item_type
-                    let itemTypeParam = params.item_type || params.itemType;
-                    if (!itemTypeParam) {
-                      console.error(
-                        "[SelectCarrier] item_type missing in params:",
-                        params
-                      );
-                    }
-                    const messagePayload = {
-                      carrier_type: carrierType,
-                      sender_location:
-                        senderAddress ||
-                        senderMarker.latitude + "," + senderMarker.longitude,
-                      receiver_location:
-                        receiverAddress ||
-                        receiverMarker.latitude +
-                          "," +
-                          receiverMarker.longitude,
-                      price: parsePrice(modalCarrier.price),
-                      created_at: new Date().toISOString(),
-                      status: "pending",
-                      sender_id: params.sender_id,
-                      insurance: toBool(params.insurance),
-                      quantity: params.quantity ? Number(params.quantity) : 1,
-                      item_type: itemTypeParam || "Unknown",
-                      is_inter_state: toBool(params.is_inter_state),
-                      // Add any other required NOT NULL fields here
-                    };
-                    const { error: msgError } = await supabase
-                      .from("message_table")
-                      .insert([messagePayload]);
-                    if (msgError) {
-                      console.error(
-                        "[SelectCarrier] Failed to insert message_table:",
-                        msgError
-                      );
-                    } else {
-                      console.log(
-                        "[SelectCarrier] Inserted message into message_table:",
-                        messagePayload
-                      );
-                    }
-                  } catch (msgEx) {
-                    console.error(
-                      "[SelectCarrier] Exception inserting message_table:",
-                      msgEx
+                  const selectedCarrier = carriers[0];
+                  // Find the latest pending delivery_request for this sender
+                  const { data: requests, error: reqError } = await supabase
+                    .from("delivery_request")
+                    .select("id, status")
+                    .eq("sender_id", params.sender_id)
+                    .eq("status", "pending")
+                    .order("created_at", { ascending: false })
+                    .limit(1);
+                  if (reqError) {
+                    alert(
+                      "Could not find your delivery request. Please try again."
                     );
+                    return;
                   }
-                  // Pass the found carriers to the next screen
+                  if (!requests || requests.length === 0) {
+                    alert("No pending delivery request found for this sender.");
+                    return;
+                  }
+                  const deliveryRequestId = requests[0].id;
+                  // Update the delivery_request with assigned_carrier_id, status, and price
+                  const { error: updateError } = await supabase
+                    .from("delivery_request")
+                    .update({
+                      assigned_carrier_id: selectedCarrier.user_id,
+                      status: "pending",
+                      price: modalCarrier.price,
+                    })
+                    .eq("id", deliveryRequestId);
+                  if (updateError) {
+                    alert("Failed to assign carrier. Please try again.");
+                    return;
+                  }
+                  // Navigate to PeerCarrier screen and pass deliveryRequestId, carrierType, and price
                   router.push({
                     pathname: "/PeerCarrier",
-                    params: { carrierType, carriers: JSON.stringify(carriers) },
+                    params: {
+                      deliveryRequestId,
+                      carrierType,
+                      price: modalCarrier.price,
+                    },
                   });
                 } catch (e) {
-                  if (e instanceof Error) {
-                    console.error("[SelectCarrier] Exception:", e.message, e);
-                    alert(e.message || "Failed to send request");
-                  } else {
-                    console.error("[SelectCarrier] Unknown exception:", e);
-                    alert("Failed to send request");
-                  }
+                  alert("Failed to assign carrier");
                 }
               }}
             >

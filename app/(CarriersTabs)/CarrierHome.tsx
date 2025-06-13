@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Platform,
   RefreshControl,
   StatusBar as RNStatusBar,
@@ -40,9 +41,13 @@ const CarrierHome = () => {
   const [profileName, setProfileName] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [toggleLoading, setToggleLoading] = useState(false); // <-- Add loading state
+  const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
   const locationSubscription = useRef<Location.LocationSubscription | null>(
     null
   );
+  const [userId, setUserId] = useState<string | null>(null);
+  const [carrierType, setCarrierType] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -99,12 +104,12 @@ const CarrierHome = () => {
         console.log("[CarrierHome] Location permission status:", status);
         if (status === "granted") {
           try {
-            const location = await Promise.race([
+            const location = (await Promise.race([
               Location.getCurrentPositionAsync({}),
               new Promise((_, reject) =>
                 setTimeout(() => reject(new Error("Location timeout")), 8000)
               ),
-            ]) as Location.LocationObject; // <-- Cast to correct type
+            ])) as Location.LocationObject; // <-- Cast to correct type
             updateData.latitude = location.coords.latitude;
             updateData.longitude = location.coords.longitude;
             console.log("[CarrierHome] Got location:", updateData);
@@ -422,6 +427,89 @@ const CarrierHome = () => {
     };
   }, [setIsOnline]);
 
+  // Fetch userId and carrierType on mount
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        // Fetch carrier_type
+        const { data: profile } = await supabase
+          .from("carrier_profile")
+          .select("carrier_type")
+          .eq("user_id", user.id)
+          .single();
+        if (profile && profile.carrier_type)
+          setCarrierType(profile.carrier_type);
+      }
+    })();
+  }, []);
+
+  // Listen for new delivery requests matching this carrier's type (broadcast model)
+  useEffect(() => {
+    if (!carrierType || !isOnline) return;
+    // Listen for INSERT and UPDATE events on delivery_request where assigned_carrier_id is null, status is 'pending', and carrier_type matches
+    const subscription = supabase
+      .channel(`delivery-requests-broadcast-${carrierType}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "delivery_request",
+          filter: `assigned_carrier_id=is.null,status=eq.pending,carrier_type=eq.${carrierType}`,
+        },
+        (payload) => {
+          const req = payload.new as any;
+          if (req && req.status === "pending" && !req.assigned_carrier_id) {
+            setPendingRequest(req);
+            setModalVisible(true);
+            console.log("[CarrierHome] Broadcast delivery_request:", req);
+          } else if (req && req.assigned_carrier_id) {
+            // Hide modal if request is assigned
+            setModalVisible(false);
+            setPendingRequest(null);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [carrierType, isOnline]);
+
+  // Accept/decline handler for delivery requests (atomic update)
+  const handleCarrierResponse = async (status: "accepted" | "declined") => {
+    if (!pendingRequest || !userId) return;
+    if (status === "accepted") {
+      // Atomically assign carrier if still unassigned and pending
+      const { error, data } = await supabase
+        .from("delivery_request")
+        .update({ assigned_carrier_id: userId, status: "accepted" })
+        .eq("id", pendingRequest.id)
+        .is("assigned_carrier_id", null)
+        .eq("status", "pending")
+        .select();
+      if (!error && data && data.length > 0) {
+        setModalVisible(false);
+        setPendingRequest(null);
+        ToastAndroid.show("Delivery accepted!", ToastAndroid.SHORT);
+      } else {
+        setModalVisible(false);
+        setPendingRequest(null);
+        ToastAndroid.show(
+          "Request already taken by another carrier.",
+          ToastAndroid.SHORT
+        );
+      }
+    } else {
+      setModalVisible(false);
+      setPendingRequest(null);
+    }
+  };
+
   return (
     <>
       <StatusBar style="light" backgroundColor={HEADER_BG} translucent={true} />
@@ -453,7 +541,9 @@ const CarrierHome = () => {
               <Text style={styles.userName}>
                 Hello, {profileName ? profileName : "there"}
               </Text>
-              <Text style={styles.userId}>User ID: 00234</Text>
+              <Text style={styles.userId}>
+                User ID: {userId ? userId.substring(0, 5) : "-----"}
+              </Text>
             </View>
             {/* Online/Offline Toggle */}
             <TouchableOpacity
@@ -473,7 +563,11 @@ const CarrierHome = () => {
                 ]}
               />
               {toggleLoading ? (
-                <ActivityIndicator size="small" color="#fff" style={{ marginLeft: 5 }} />
+                <ActivityIndicator
+                  size="small"
+                  color="#fff"
+                  style={{ marginLeft: 5 }}
+                />
               ) : (
                 <Text style={styles.toggleText}>
                   {isOnline ? "You are Online" : "Gone Offline"}
@@ -1055,6 +1149,59 @@ const CarrierHome = () => {
           </View>
         </ScrollView>
       </SafeAreaView>
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.4)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              padding: 24,
+              borderRadius: 16,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+              New Delivery Request
+            </Text>
+            <Text style={{ marginVertical: 12 }}>
+              Do you want to accept this delivery?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 16 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#0DB760",
+                  padding: 12,
+                  borderRadius: 8,
+                  marginRight: 10,
+                }}
+                onPress={() => handleCarrierResponse("accepted")}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  Accept
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#e74c3c",
+                  padding: 12,
+                  borderRadius: 8,
+                }}
+                onPress={() => handleCarrierResponse("declined")}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  Decline
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
