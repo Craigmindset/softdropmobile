@@ -190,49 +190,41 @@ const FindCarrier = () => {
       }
       const sender_id = user.id;
 
+      // Fetch sender_name and sender_contact from sender_profile
+      let sender_name = null;
+      let sender_contact = null;
+      try {
+        const { data: senderProfile, error: senderProfileError } =
+          await supabase
+            .from("sender_profile")
+            .select("first_name, last_name, phone")
+            .eq("user_id", sender_id)
+            .single();
+        if (!senderProfileError && senderProfile) {
+          sender_name = `${senderProfile.first_name || ""} ${
+            senderProfile.last_name || ""
+          }`.trim();
+          sender_contact = senderProfile.phone || null;
+        }
+      } catch (e) {
+        // fallback: leave sender_name and sender_contact as null
+      }
+
       // Geocode receiver location
       let receiver_latitude = null;
       let receiver_longitude = null;
-      try {
-        const geoResults = await Location.geocodeAsync(receiverLocation);
-        if (geoResults && geoResults.length > 0) {
-          receiver_latitude = geoResults[0].latitude;
-          receiver_longitude = geoResults[0].longitude;
+      if (receiverLocation && receiverLocation.trim().length > 0) {
+        try {
+          const geoResults = await Location.geocodeAsync(receiverLocation);
+          if (geoResults && geoResults.length > 0) {
+            receiver_latitude = geoResults[0].latitude;
+            receiver_longitude = geoResults[0].longitude;
+          }
+        } catch (geoErr) {
+          console.error("Geocoding error for receiver location:", geoErr);
         }
-      } catch (geoErr) {
-        console.error("Geocoding error for receiver location:", geoErr);
       }
 
-      const { error } = await supabase.from("delivery_request").insert([
-        {
-          sender_id,
-          item_type: itemType,
-          quantity,
-          insurance,
-          images: images.filter(Boolean),
-          sender_location: senderLocation,
-          sender_latitude: location?.latitude ?? null,
-          sender_longitude: location?.longitude ?? null,
-          sender_contact: user.phone || null, // Add sender contact here
-          sender_name: user.user_metadata?.first_name || null, // Add sender name here
-          receiver_location: receiverLocation,
-          receiver_latitude,
-          receiver_longitude,
-          receiver_contact: receiverContact,
-          receiver_name: receiverName,
-          is_inter_state: isInterState,
-          delivery_method: deliveryMethod,
-        },
-      ]);
-      if (error) {
-        console.error("Supabase submission error:", error);
-        Alert.alert(
-          "Submission Failed",
-          error.message || "Could not submit request."
-        );
-        return;
-      }
-      setLastSenderAddress(senderLocation); // Save the last used sender address
       // Prepare params for navigation
       const navParams = {
         sender_latitude: location?.latitude
@@ -254,6 +246,12 @@ const FindCarrier = () => {
         quantity: String(quantity ?? 1), // <-- Always pass a value
         insurance: String(insurance ?? false), // <-- Always pass a value
         is_inter_state: String(isInterState ?? false), // <-- Always pass a value
+        images: images.filter((img): img is string => !!img), // Only strings
+        sender_contact, // <-- Use fetched sender_contact from sender_profile
+        sender_name, // <-- Use fetched sender_name
+        receiver_contact: receiverContact,
+        receiver_name: receiverName,
+        delivery_method: deliveryMethod,
       };
       if (!navParams.item_type || !navParams.item_type.trim()) {
         console.warn(

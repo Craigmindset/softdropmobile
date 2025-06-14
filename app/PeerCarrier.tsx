@@ -1,5 +1,4 @@
 import { FontAwesome5 } from "@expo/vector-icons";
-import { RealtimeChannel } from "@supabase/supabase-js";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -40,6 +39,7 @@ const PeerCarrier = () => {
   const [pendingRequestForMe, setPendingRequestForMe] = useState<any>(null);
   const [isMyDecisionModalVisible, setIsMyDecisionModalVisible] =
     useState(false);
+  const [senderContact, setSenderContact] = useState<string | null>(null);
   const router = useRouter();
 
   const center = { latitude: 6.6018, longitude: 3.3515 };
@@ -52,17 +52,19 @@ const PeerCarrier = () => {
         setAssignedCarrier(null);
         return;
       }
-      // Get the delivery_request to find the assigned_carrier_id
+      // Get the delivery_request to find the assigned_carrier_id and sender_contact
       const { data: request, error: reqError } = await supabase
         .from("delivery_request")
-        .select("assigned_carrier_id")
+        .select("assigned_carrier_id, sender_contact")
         .eq("id", params.deliveryRequestId)
         .single();
       console.log("[fetchAssignedCarrier] delivery_request", request, reqError);
       if (reqError || !request?.assigned_carrier_id) {
         setAssignedCarrier(null);
+        setSenderContact(request?.sender_contact || null);
         return;
       }
+      setSenderContact(request.sender_contact || null);
       // Get the carrier profile for the assigned carrier, matching type and online
       const { data: carrier, error: carrierError } = await supabase
         .from("carrier_profile")
@@ -109,7 +111,7 @@ const PeerCarrier = () => {
 
   // Poll for online matching carriers every 5 seconds
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
     const fetchMatchingCarriers = async () => {
       if (!params.carrierType) return;
       const { data: carriers, error } = await supabase
@@ -142,7 +144,7 @@ const PeerCarrier = () => {
   }, []);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: number;
     if (time === 0) {
       setShowRetry(true);
     } else {
@@ -175,19 +177,20 @@ const PeerCarrier = () => {
 
   // Show modal when assignedCarrier is set
   useEffect(() => {
-    if (assignedCarrier) {
-      console.log(
-        "[assignedCarrier] Modal shown for assigned carrier",
-        assignedCarrier
-      );
+    if (
+      assignedCarrier &&
+      currentUserId === assignedCarrier.user_id // Only show for assigned carrier
+    ) {
       setIsDecisionModalVisible(true);
+    } else {
+      setIsDecisionModalVisible(false);
     }
-  }, [assignedCarrier]);
+  }, [assignedCarrier, currentUserId]);
 
   // Poll for delivery requests for this carrier every 5 seconds
   useEffect(() => {
     if (!currentUserId) return;
-    let interval: NodeJS.Timeout;
+    let interval: number;
     const fetchPendingRequest = async () => {
       const { data: requests, error } = await supabase
         .from("carrier_requests")
@@ -209,66 +212,7 @@ const PeerCarrier = () => {
   }, [currentUserId]);
 
   // Real-time subscription for delivery requests
-  useEffect(() => {
-    if (!currentUserId || !params.carrierType) return;
-    let channel: RealtimeChannel | null = null;
-    const subscribeToRequests = async () => {
-      channel = supabase
-        .channel("delivery_request_broadcast")
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "delivery_request",
-            filter: `carrier_type=eq.${params.carrierType}`,
-          },
-          (payload) => {
-            const request = payload.new;
-            console.log("[realtime][INSERT] delivery_request", request);
-            if (request.status === "pending" && !request.assigned_carrier_id) {
-              setPendingRequestForMe(request);
-              setIsMyDecisionModalVisible(true);
-            }
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "delivery_request",
-            filter: `carrier_type=eq.${params.carrierType}`,
-          },
-          (payload) => {
-            const request = payload.new;
-            console.log("[realtime][UPDATE] delivery_request", request);
-            if (request.status === "pending" && !request.assigned_carrier_id) {
-              setPendingRequestForMe(request);
-              setIsMyDecisionModalVisible(true);
-            } else {
-              setPendingRequestForMe(null);
-              setIsMyDecisionModalVisible(false);
-            }
-          }
-        );
-      const { data, error } = await channel.subscribe((status) => {
-        console.log("[realtime][subscribe status]", status);
-      });
-      if (error) {
-        console.log("[realtime][subscribe error]", error);
-      } else {
-        console.log("[realtime][subscribe data]", data);
-      }
-    };
-    subscribeToRequests();
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-        console.log("[realtime] Channel removed");
-      }
-    };
-  }, [currentUserId, params.carrierType]);
+  // (Removed: this logic should only be in CarrierHome, not PeerCarrier)
 
   // Add a debug log in the render
   console.log("[render] PeerCarrier", {
@@ -370,8 +314,21 @@ const PeerCarrier = () => {
             : "Waiting for carrier assignment..."}
         </Text>
         <Text style={styles.subText}>
-          Please wait for a courier{"\n"}
+          Please wait for a carrier{"\n"}
           <Text style={styles.subText2}>to accept your package</Text>
+        </Text>
+
+        {/* Show number of matching online carriers */}
+        <Text
+          style={{
+            color: "#0DB760",
+            fontWeight: "bold",
+            fontSize: 16,
+            marginBottom: 8,
+          }}
+        >
+          {matchingCarriers.length} carrier
+          {matchingCarriers.length === 1 ? "" : "s"} available online
         </Text>
 
         {/* Countdown Timer */}
@@ -491,256 +448,6 @@ const PeerCarrier = () => {
                     fontWeight: "bold",
                     fontSize: 16,
                   }}
-                >
-                  Decline
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Decision Modal for broadcasted requests to this carrier */}
-      <Modal
-        visible={isMyDecisionModalVisible}
-        transparent
-        animationType="slide"
-      >
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.5)",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#fff",
-              borderRadius: 16,
-              padding: 24,
-              width: "85%",
-              alignItems: "center",
-            }}
-          >
-            <Text
-              style={{ fontSize: 20, fontWeight: "bold", marginBottom: 12 }}
-            >
-              New Delivery Request
-            </Text>
-            {/* Delivery details */}
-            {pendingRequestForMe && (
-              <View style={{ marginBottom: 16, width: "100%" }}>
-                {/* Sender Section */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <FontAwesome5
-                    name="user"
-                    size={16}
-                    color="#0DB760"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    style={{ fontWeight: "bold", fontSize: 16 }}
-                  >{`Sender: ${pendingRequestForMe.sender_name || "-"}`}</Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <FontAwesome5
-                    name="phone"
-                    size={14}
-                    color="#888"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14 }}>
-                    {`Contact: ${pendingRequestForMe.sender_contact || "-"}`}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <FontAwesome5
-                    name="map-marker-alt"
-                    size={14}
-                    color="#888"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14 }}>
-                    {`Location: ${pendingRequestForMe.sender_location || "-"}`}
-                  </Text>
-                </View>
-                {/* Divider */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#e0e0e0",
-                    marginVertical: 8,
-                    width: "100%",
-                  }}
-                />
-                {/* Item Section */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <FontAwesome5
-                    name="box"
-                    size={14}
-                    color="#888"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14 }}>
-                    {`Item: ${
-                      pendingRequestForMe.item_type || "-"
-                    }  |  Price: ${
-                      pendingRequestForMe.price !== undefined &&
-                      pendingRequestForMe.price !== null &&
-                      pendingRequestForMe.price !== ""
-                        ? pendingRequestForMe.price
-                        : params.price || "-"
-                    }`}
-                  </Text>
-                </View>
-                {/* Divider */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#e0e0e0",
-                    marginVertical: 8,
-                    width: "100%",
-                  }}
-                />
-                {/* Receiver Section */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginTop: 8,
-                    marginBottom: 4,
-                  }}
-                >
-                  <FontAwesome5
-                    name="user"
-                    size={16}
-                    color="#e67e22"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    style={{ fontWeight: "bold", fontSize: 16 }}
-                  >{`Receiver: ${
-                    pendingRequestForMe.receiver_name || "-"
-                  }`}</Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 4,
-                  }}
-                >
-                  <FontAwesome5
-                    name="phone"
-                    size={14}
-                    color="#888"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14 }}>
-                    {`Contact: ${pendingRequestForMe.receiver_contact || "-"}`}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                  }}
-                >
-                  <FontAwesome5
-                    name="map-marker-alt"
-                    size={14}
-                    color="#888"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14 }}>
-                    {`Location: ${
-                      pendingRequestForMe.receiver_location || "-"
-                    }`}
-                  </Text>
-                </View>
-              </View>
-            )}
-            <Text style={{ fontSize: 16, marginBottom: 24 }}>
-              Do you want to accept this delivery?
-            </Text>
-            <View style={{ flexDirection: "row", gap: 16 }}>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#0DB760",
-                  padding: 12,
-                  borderRadius: 8,
-                  marginRight: 8,
-                }}
-                onPress={async () => {
-                  // Accept: atomically assign this carrier if still unassigned
-                  if (pendingRequestForMe) {
-                    const { data, error } = await supabase
-                      .from("delivery_request")
-                      .update({
-                        assigned_carrier_id: currentUserId,
-                        status: "accepted",
-                      })
-                      .eq("id", pendingRequestForMe.id)
-                      .is("assigned_carrier_id", null);
-                    if (!error && data && data.length > 0) {
-                      // Success: assigned to this carrier
-                      setIsMyDecisionModalVisible(false);
-                      setPendingRequestForMe(null);
-                      // Optionally show confirmation or navigate
-                    } else {
-                      // Someone else already accepted
-                      setIsMyDecisionModalVisible(false);
-                      setPendingRequestForMe(null);
-                      // Optionally show a message
-                    }
-                  }
-                }}
-              >
-                <Text
-                  style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
-                >
-                  Accept
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#e74c3c",
-                  padding: 12,
-                  borderRadius: 8,
-                }}
-                onPress={async () => {
-                  // Decline: mark as declined for this carrier (optional: update a carrier_requests table)
-                  setIsMyDecisionModalVisible(false);
-                  setPendingRequestForMe(null);
-                }}
-              >
-                <Text
-                  style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
                 >
                   Decline
                 </Text>

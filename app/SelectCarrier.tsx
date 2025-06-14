@@ -561,7 +561,10 @@ export default function SelectCarrierScreen() {
                   "Car Carrier": "Car",
                 };
                 const cardTitle = modalCarrier.cardTitle || modalCarrier.title;
-                const carrierType = cardTitleToType[cardTitle] || "Carrier";
+                // Fix TS error: cast cardTitle as keyof typeof cardTitleToType
+                const carrierType =
+                  cardTitleToType[cardTitle as keyof typeof cardTitleToType] ||
+                  "Carrier";
                 try {
                   // Find the first available online carrier of this type
                   const { data: carriers, error } = await supabase
@@ -578,49 +581,107 @@ export default function SelectCarrierScreen() {
                     return;
                   }
                   const selectedCarrier = carriers[0];
-                  // Find the latest pending delivery_request for this sender
-                  const { data: requests, error: reqError } = await supabase
-                    .from("delivery_request")
-                    .select("id, status")
-                    .eq("sender_id", params.sender_id)
-                    .eq("status", "pending")
-                    .order("created_at", { ascending: false })
-                    .limit(1);
-                  if (reqError) {
-                    alert(
-                      "Could not find your delivery request. Please try again."
+
+                  // Fetch sender_name from sender_profile
+                  const { data: senderProfile, error: senderProfileError } =
+                    await supabase
+                      .from("sender_profile")
+                      .select("first_name, last_name")
+                      .eq("user_id", params.sender_id)
+                      .single();
+                  if (senderProfileError || !senderProfile) {
+                    alert("Could not fetch sender profile. Please try again.");
+                    return;
+                  }
+                  const sender_name = `${senderProfile.first_name || ""} ${
+                    senderProfile.last_name || ""
+                  }`.trim();
+
+                  // Parse price to number if possible
+                  let priceValue = null;
+                  if (typeof modalCarrier.price === "string") {
+                    // Remove currency symbol and commas
+                    priceValue = Number(
+                      modalCarrier.price.replace(/[^\d.]/g, "")
                     );
-                    return;
+                  } else if (typeof modalCarrier.price === "number") {
+                    priceValue = modalCarrier.price;
                   }
-                  if (!requests || requests.length === 0) {
-                    alert("No pending delivery request found for this sender.");
-                    return;
-                  }
-                  const deliveryRequestId = requests[0].id;
-                  // Update the delivery_request with assigned_carrier_id, status, and price
-                  const { error: updateError } = await supabase
-                    .from("delivery_request")
-                    .update({
-                      assigned_carrier_id: selectedCarrier.user_id,
-                      status: "pending",
-                      price: modalCarrier.price,
-                    })
-                    .eq("id", deliveryRequestId);
-                  if (updateError) {
-                    alert("Failed to assign carrier. Please try again.");
+                  // Prepare all params for delivery_request insert
+                  let imagesField = null;
+                  if (
+                    Array.isArray(params.images) &&
+                    params.images.length > 0
+                  ) {
+                    imagesField = params.images;
+                  } else if (
+                    typeof params.images === "string" &&
+                    params.images.trim() !== ""
+                  ) {
+                    // If a single image string is passed, wrap in array
+                    imagesField = [params.images];
+                  } // else leave as null
+                  const insertPayload = {
+                    sender_id: params.sender_id,
+                    sender_name,
+                    sender_contact: params.sender_contact, // <-- Use sender_contact from params
+                    sender_location: params.sender_location,
+                    sender_latitude: params.sender_latitude
+                      ? Number(params.sender_latitude)
+                      : null,
+                    sender_longitude: params.sender_longitude
+                      ? Number(params.sender_longitude)
+                      : null,
+                    receiver_location: params.receiver_location,
+                    receiver_latitude: params.receiver_latitude
+                      ? Number(params.receiver_latitude)
+                      : null,
+                    receiver_longitude: params.receiver_longitude
+                      ? Number(params.receiver_longitude)
+                      : null,
+                    receiver_name: params.receiver_name,
+                    receiver_contact: params.receiver_contact,
+                    item_type: params.item_type,
+                    quantity: params.quantity ? Number(params.quantity) : 1,
+                    insurance: String(params.insurance) === "true",
+                    is_inter_state: String(params.is_inter_state) === "true",
+                    images: imagesField,
+                    delivery_method: params.delivery_method,
+                    price: priceValue,
+                    carrier_type: carrierType,
+                    assigned_carrier_id: selectedCarrier.user_id,
+                    status: "pending",
+                  };
+                  console.log("[SelectCarrier] insertPayload:", insertPayload);
+                  console.log("[SelectCarrier] params:", params);
+                  // Insert new delivery_request
+                  const { data: newRequest, error: insertError } =
+                    await supabase
+                      .from("delivery_request")
+                      .insert([insertPayload])
+                      .select()
+                      .single();
+                  if (insertError || !newRequest) {
+                    console.error(
+                      "[SelectCarrier] Supabase insertError:",
+                      insertError
+                    );
+                    alert(
+                      "Failed to create delivery request. Please try again."
+                    );
                     return;
                   }
                   // Navigate to PeerCarrier screen and pass deliveryRequestId, carrierType, and price
                   router.push({
                     pathname: "/PeerCarrier",
                     params: {
-                      deliveryRequestId,
+                      deliveryRequestId: newRequest.id,
                       carrierType,
                       price: modalCarrier.price,
                     },
                   });
                 } catch (e) {
-                  alert("Failed to assign carrier");
+                  alert("Failed to create delivery request");
                 }
               }}
             >
