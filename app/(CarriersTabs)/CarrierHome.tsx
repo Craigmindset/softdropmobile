@@ -34,6 +34,8 @@ import { useOnlineStatus } from "../OnlineStatusContext";
 const HEADER_BG = "#0B4D1C";
 
 const CarrierHome = () => {
+  console.log("[CarrierHome] Rendered");
+
   const { isOnline, setIsOnline } = useOnlineStatus();
   const [showBalance, setShowBalance] = useState(false);
   const [blink, setBlink] = useState(true); // For blinking effect
@@ -449,8 +451,20 @@ const CarrierHome = () => {
 
   // Listen for new delivery requests matching this carrier's type (broadcast model)
   useEffect(() => {
-    if (!carrierType || !isOnline) return;
-    // Listen for INSERT and UPDATE events on delivery_request where assigned_carrier_id is null, status is 'pending', and carrier_type matches
+    console.log(
+      "[CarrierHome] useEffect for broadcast subscription. carrierType:",
+      carrierType,
+      "isOnline:",
+      isOnline
+    );
+    if (!carrierType || !isOnline) {
+      console.log(
+        "[CarrierHome] Not subscribing: carrierType or isOnline is falsy",
+        { carrierType, isOnline }
+      );
+      return;
+    }
+    // Listen for INSERT and UPDATE events on delivery_request where assigned_carrier_id is null, status is 'broadcasting', and carrier_type matches
     const subscription = supabase
       .channel(`delivery-requests-broadcast-${carrierType}`)
       .on(
@@ -459,11 +473,19 @@ const CarrierHome = () => {
           event: "*",
           schema: "public",
           table: "delivery_request",
-          filter: `assigned_carrier_id=is.null,status=eq.pending,carrier_type=eq.${carrierType}`,
+          filter: `assigned_carrier_id=is.null,status=eq.broadcasting,carrier_type=eq.${carrierType}`,
         },
         (payload) => {
+          console.log(
+            "[CarrierHome] Subscription callback fired. Payload:",
+            payload
+          );
           const req = payload.new as any;
-          if (req && req.status === "pending" && !req.assigned_carrier_id) {
+          if (
+            req &&
+            req.status === "broadcasting" &&
+            !req.assigned_carrier_id
+          ) {
             setPendingRequest(req);
             setModalVisible(true);
             console.log("[CarrierHome] Broadcast delivery_request:", req);
@@ -475,6 +497,10 @@ const CarrierHome = () => {
         }
       )
       .subscribe();
+    console.log(
+      "[CarrierHome] Subscribed to delivery-requests-broadcast-" + carrierType,
+      subscription
+    );
     return () => {
       supabase.removeChannel(subscription);
     };

@@ -561,10 +561,15 @@ export default function SelectCarrierScreen() {
                   "Car Carrier": "Car",
                 };
                 const cardTitle = modalCarrier.cardTitle || modalCarrier.title;
-                // Fix TS error: cast cardTitle as keyof typeof cardTitleToType
                 const carrierType =
                   cardTitleToType[cardTitle as keyof typeof cardTitleToType] ||
                   "Carrier";
+                // Log for debugging: only for Bike Carrier
+                if (carrierType === "Bike") {
+                  console.log("[SelectCarrier] Bike Carrier button pressed");
+                  console.log("modalCarrier:", modalCarrier);
+                  console.log("params:", params);
+                }
                 try {
                   // Find the first available online carrier of this type
                   const { data: carriers, error } = await supabase
@@ -586,28 +591,37 @@ export default function SelectCarrierScreen() {
                   const { data: senderProfile, error: senderProfileError } =
                     await supabase
                       .from("sender_profile")
-                      .select("first_name, last_name")
+                      .select("first_name, last_name, phone") // <-- fetch phone instead of contact
                       .eq("user_id", params.sender_id)
                       .single();
                   if (senderProfileError || !senderProfile) {
+                    console.log(
+                      "[SelectCarrier] senderProfileError:",
+                      senderProfileError
+                    );
+                    console.log(
+                      "[SelectCarrier] senderProfile:",
+                      senderProfile
+                    );
                     alert("Could not fetch sender profile. Please try again.");
                     return;
                   }
                   const sender_name = `${senderProfile.first_name || ""} ${
                     senderProfile.last_name || ""
                   }`.trim();
+                  const sender_contact =
+                    senderProfile.phone || params.sender_contact || null;
 
                   // Parse price to number if possible
                   let priceValue = null;
                   if (typeof modalCarrier.price === "string") {
-                    // Remove currency symbol and commas
                     priceValue = Number(
                       modalCarrier.price.replace(/[^\d.]/g, "")
                     );
                   } else if (typeof modalCarrier.price === "number") {
                     priceValue = modalCarrier.price;
                   }
-                  // Prepare all params for delivery_request insert
+                  // Prepare imagesField for insert
                   let imagesField = null;
                   if (
                     Array.isArray(params.images) &&
@@ -618,13 +632,13 @@ export default function SelectCarrierScreen() {
                     typeof params.images === "string" &&
                     params.images.trim() !== ""
                   ) {
-                    // If a single image string is passed, wrap in array
                     imagesField = [params.images];
-                  } // else leave as null
+                  }
+                  // Prepare all params for delivery_request insert (broadcast model)
                   const insertPayload = {
                     sender_id: params.sender_id,
                     sender_name,
-                    sender_contact: params.sender_contact, // <-- Use sender_contact from params
+                    sender_contact, // fetched from sender_profile
                     sender_location: params.sender_location,
                     sender_latitude: params.sender_latitude
                       ? Number(params.sender_latitude)
@@ -649,11 +663,13 @@ export default function SelectCarrierScreen() {
                     delivery_method: params.delivery_method,
                     price: priceValue,
                     carrier_type: carrierType,
-                    assigned_carrier_id: selectedCarrier.user_id,
-                    status: "pending",
+                    assigned_carrier_id: null, // <-- no carrier assigned yet
+                    status: "broadcasting", // <-- broadcasting status
                   };
-                  console.log("[SelectCarrier] insertPayload:", insertPayload);
-                  console.log("[SelectCarrier] params:", params);
+                  console.log(
+                    "[SelectCarrier] BROADCAST insertPayload:",
+                    insertPayload
+                  );
                   // Insert new delivery_request
                   const { data: newRequest, error: insertError } =
                     await supabase

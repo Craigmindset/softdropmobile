@@ -161,12 +161,21 @@ const PeerCarrier = () => {
 
   // Retry button handler
   const handleRetry = async () => {
+    console.log("[PeerCarrier] Retry button pressed", params);
     setTime(30);
     setShowRetry(false);
-    console.log(
-      "[handleRetry] Retrying, clearing carrier_requests for message_id",
-      params?.message_id
-    );
+    // Rebroadcast: update the existing delivery_request to broadcasting and clear assigned carrier
+    if (params && params.deliveryRequestId) {
+      await supabase
+        .from("delivery_request")
+        .update({ status: "broadcasting", assigned_carrier_id: null })
+        .eq("id", params.deliveryRequestId);
+      console.log(
+        "[handleRetry] Rebroadcasted delivery_request",
+        params.deliveryRequestId
+      );
+    }
+    // Optionally clear carrier_requests if you use that table for other logic
     if (params && params.message_id) {
       await supabase
         .from("carrier_requests")
