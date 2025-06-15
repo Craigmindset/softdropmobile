@@ -34,8 +34,6 @@ import { useOnlineStatus } from "../OnlineStatusContext";
 const HEADER_BG = "#0B4D1C";
 
 const CarrierHome = () => {
-  console.log("[CarrierHome] Rendered");
-
   const { isOnline, setIsOnline } = useOnlineStatus();
   const [showBalance, setShowBalance] = useState(false);
   const [blink, setBlink] = useState(true); // For blinking effect
@@ -535,6 +533,25 @@ const CarrierHome = () => {
       setPendingRequest(null);
     }
   };
+
+  // Fetch existing matching delivery requests on mount or when carrierType/isOnline changes
+  useEffect(() => {
+    const fetchExistingRequests = async () => {
+      if (!carrierType || !isOnline) return;
+      const { data: requests, error } = await supabase
+        .from("delivery_request")
+        .select("*")
+        .eq("carrier_type", carrierType)
+        .eq("status", "broadcasting")
+        .is("assigned_carrier_id", null)
+        .order("created_at", { ascending: false });
+      if (!error && requests && requests.length > 0) {
+        setPendingRequest(requests[0]);
+        setModalVisible(true);
+      }
+    };
+    fetchExistingRequests();
+  }, [carrierType, isOnline]);
 
   return (
     <>
