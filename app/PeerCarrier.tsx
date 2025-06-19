@@ -528,12 +528,6 @@ const PeerCarrier = (props) => {
           </View>
         </View>
       </Modal>
-
-      <Text style={{ textAlign: "center", marginTop: 32, fontSize: 18 }}>
-        {carrierAccepted
-          ? "A carrier has accepted your package!"
-          : "Please wait for a carrier to accept your package."}
-      </Text>
     </View>
   );
 };
