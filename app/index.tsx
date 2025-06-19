@@ -1,3 +1,5 @@
+console.warn = () => {};
+
 import { IntroSlider } from "@/components/intro/IntroSlider";
 import { ThemedView } from "@/components/ThemedView";
 import { Stack } from "expo-router";

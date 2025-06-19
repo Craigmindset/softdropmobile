@@ -47,6 +47,7 @@ const FindCarrier = () => {
   const [receiverName, setReceiverName] = useState(""); // Add this state for receiver name
   const [isInterState, setIsInterState] = useState(false); // Track Inter-State selection
   const [deliveryMethod, setDeliveryMethod] = useState("arrival"); // "arrival" or "home"
+  const [onlineCarriers, setOnlineCarriers] = useState<any[]>([]);
 
   const router = useRouter();
 
@@ -78,6 +79,27 @@ const FindCarrier = () => {
         longitudeDelta: 0.01,
       });
     })();
+  }, []);
+
+  // Fetch all online carriers on mount and every 15 seconds
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    const fetchOnlineCarriers = async () => {
+      const { data, error } = await supabase
+        .from("carrier_profile")
+        .select(
+          "user_id, latitude, longitude, carrier_type, first_name, is_online"
+        )
+        .eq("is_online", true);
+      if (!error && data) {
+        setOnlineCarriers(data);
+      } else {
+        setOnlineCarriers([]);
+      }
+    };
+    fetchOnlineCarriers();
+    interval = setInterval(fetchOnlineCarriers, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   // Function to get address from coordinates
@@ -324,17 +346,49 @@ const FindCarrier = () => {
               showsMyLocationButton={true}
               loadingEnabled={true}
               userInterfaceStyle="dark"
-              // Add your Google Maps API key in app.json or AndroidManifest.xml for production
             >
-              {location && (
+              {location &&
+                location.latitude != null &&
+                location.longitude != null && (
+                  <Marker
+                    coordinate={{
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                    }}
+                    title="You are here"
+                    pinColor="#0DB760"
+                  />
+                )}
+              {/* Show all online carriers as markers */}
+              {onlineCarriers.map((carrier) => (
                 <Marker
+                  key={carrier.user_id}
                   coordinate={{
-                    latitude: location.latitude,
-                    longitude: location.longitude,
+                    latitude: carrier.latitude,
+                    longitude: carrier.longitude,
                   }}
-                  title="You are here"
-                />
-              )}
+                  title={carrier.first_name || "Carrier"}
+                  description={carrier.carrier_type}
+                >
+                  {carrier.carrier_type === "Bike" ? (
+                    <Image
+                      source={require("../assets/images/bike.png")}
+                      style={{ width: 28, height: 28, resizeMode: "contain" }}
+                    />
+                  ) : carrier.carrier_type === "Bicycle" ? (
+                    <FontAwesome5 name="bicycle" size={32} color="#0DB760" />
+                  ) : carrier.carrier_type === "Car" ? (
+                    <FontAwesome5 name="car" size={32} color="#0DB760" />
+                  ) : (
+                    <FontAwesome5 name="user" size={32} color="#0DB760" />
+                  )}
+                  <Text
+                    style={{ fontWeight: "bold", fontSize: 12, marginTop: 2 }}
+                  >
+                    {carrier.first_name || "Carrier"}
+                  </Text>
+                </Marker>
+              ))}
             </MapView>
           </View>
 

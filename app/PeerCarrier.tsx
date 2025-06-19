@@ -1,4 +1,5 @@
 import { FontAwesome5 } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
@@ -25,7 +26,7 @@ const getRandomCoords = (
   longitude: center.longitude + (Math.random() - 0.5) * delta,
 });
 
-const PeerCarrier = () => {
+const PeerCarrier = (props) => {
   const params = useLocalSearchParams();
   const [time, setTime] = useState(30);
   const [assignedCarrier, setAssignedCarrier] = useState<any>(null);
@@ -41,6 +42,9 @@ const PeerCarrier = () => {
     useState(false);
   const [senderContact, setSenderContact] = useState<string | null>(null);
   const router = useRouter();
+  const navigation = useNavigation();
+  const [carrierAccepted, setCarrierAccepted] = useState(false);
+  const [acceptedCarrierInfo, setAcceptedCarrierInfo] = useState(null);
 
   const center = { latitude: 6.6018, longitude: 3.3515 };
 
@@ -196,32 +200,85 @@ const PeerCarrier = () => {
     }
   }, [assignedCarrier, currentUserId]);
 
-  // Poll for delivery requests for this carrier every 5 seconds
+  // Navigate to Accept.tsx after 5 seconds when a carrier is assigned
   useEffect(() => {
-    if (!currentUserId) return;
-    let interval: number;
-    const fetchPendingRequest = async () => {
-      const { data: requests, error } = await supabase
-        .from("carrier_requests")
-        .select("*")
-        .eq("carrier_id", currentUserId)
-        .eq("status", "pending");
-      console.log("[fetchPendingRequest]", requests, error);
-      if (!error && requests && requests.length > 0) {
-        setPendingRequest(requests[0]);
-        setIsCarrierDecisionModalVisible(true);
-      } else {
-        setPendingRequest(null);
-        setIsCarrierDecisionModalVisible(false);
-      }
-    };
-    fetchPendingRequest();
-    interval = setInterval(fetchPendingRequest, 5000);
-    return () => clearInterval(interval);
-  }, [currentUserId]);
+    let timeout: number;
+    if (
+      assignedCarrier &&
+      assignedCarrier.first_name &&
+      assignedCarrier.user_id
+    ) {
+      timeout = setTimeout(() => {
+        router.replace({
+          pathname: "/Accept",
+          params: {
+            carrierName: assignedCarrier.first_name,
+            carrierId: assignedCarrier.user_id,
+            // Add more fields as needed, e.g. phone, contact
+          },
+        });
+      }, 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [assignedCarrier]);
 
-  // Real-time subscription for delivery requests
-  // (Removed: this logic should only be in CarrierHome, not PeerCarrier)
+  // Real-time subscription for delivery request assignment (postgres_changes)
+  useEffect(() => {
+    if (!params.deliveryRequestId) return;
+
+    const subscription = supabase
+      .channel("delivery-request-status")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "delivery_request",
+          filter: `id=eq.${params.deliveryRequestId}`,
+        },
+        async (payload) => {
+          const req = payload.new as any;
+          if (req && req.assigned_carrier_id) {
+            setCarrierAccepted(true);
+
+            // Optionally fetch carrier info from your carrier_profile table
+            const { data: carrierProfile } = await supabase
+              .from("carrier_profile")
+              .select(
+                "first_name,last_name,phone,latitude,longitude,carrier_type"
+              )
+              .eq("user_id", req.assigned_carrier_id)
+              .single();
+
+            setAcceptedCarrierInfo(carrierProfile);
+
+            setTimeout(() => {
+              navigation.navigate("Accept", {
+                carrierName: carrierProfile
+                  ? `${carrierProfile.first_name} ${carrierProfile.last_name}`
+                  : "Carrier",
+                carrierPhone: carrierProfile ? carrierProfile.phone : "",
+                carrierLat: carrierProfile ? carrierProfile.latitude : null,
+                carrierLng: carrierProfile ? carrierProfile.longitude : null,
+                carrierType: carrierProfile ? carrierProfile.carrier_type : "",
+                itemType: req.item_type || "",
+                senderName: req.sender_name || "",
+                senderContact: req.sender_contact || "",
+                pickupAddress: req.sender_location || "",
+                deliveryAddress: req.receiver_location || "",
+                receiverName: req.receiver_name || "",
+                price: req.price || "",
+              });
+            }, 5000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [params.deliveryRequestId, navigation]);
 
   // Add a debug log in the render
   console.log("[render] PeerCarrier", {
@@ -231,7 +288,7 @@ const PeerCarrier = () => {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1 }}>
       {/* StatusBar background workaround */}
       <View style={styles.statusBarBg} />
       <StatusBar style="dark" translucent backgroundColor="transparent" />
@@ -323,8 +380,14 @@ const PeerCarrier = () => {
             : "Waiting for carrier assignment..."}
         </Text>
         <Text style={styles.subText}>
-          Please wait for a carrier{"\n"}
-          <Text style={styles.subText2}>to accept your package</Text>
+          {assignedCarrier ? (
+            "Carrier has accepted your package"
+          ) : (
+            <>
+              Please wait for a carrier{"\n"}
+              <Text style={styles.subText2}>to accept your package</Text>
+            </>
+          )}
         </Text>
 
         {/* Show number of matching online carriers */}
@@ -465,6 +528,12 @@ const PeerCarrier = () => {
           </View>
         </View>
       </Modal>
+
+      <Text style={{ textAlign: "center", marginTop: 32, fontSize: 18 }}>
+        {carrierAccepted
+          ? "A carrier has accepted your package!"
+          : "Please wait for a carrier to accept your package."}
+      </Text>
     </View>
   );
 };

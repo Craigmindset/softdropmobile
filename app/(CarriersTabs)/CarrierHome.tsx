@@ -449,20 +449,10 @@ const CarrierHome = () => {
 
   // Listen for new delivery requests matching this carrier's type (broadcast model)
   useEffect(() => {
-    console.log(
-      "[CarrierHome] useEffect for broadcast subscription. carrierType:",
-      carrierType,
-      "isOnline:",
-      isOnline
-    );
     if (!carrierType || !isOnline) {
-      console.log(
-        "[CarrierHome] Not subscribing: carrierType or isOnline is falsy",
-        { carrierType, isOnline }
-      );
       return;
     }
-    // Listen for INSERT and UPDATE events on delivery_request where assigned_carrier_id is null, status is 'broadcasting', and carrier_type matches
+    // Subscribe to all INSERT and UPDATE events for this carrier_type
     const subscription = supabase
       .channel(`delivery-requests-broadcast-${carrierType}`)
       .on(
@@ -471,34 +461,26 @@ const CarrierHome = () => {
           event: "*",
           schema: "public",
           table: "delivery_request",
-          filter: `assigned_carrier_id=is.null,status=eq.broadcasting,carrier_type=eq.${carrierType}`,
+          filter: `carrier_type=eq.${carrierType}`,
         },
         (payload) => {
-          console.log(
-            "[CarrierHome] Subscription callback fired. Payload:",
-            payload
-          );
           const req = payload.new as any;
           if (
             req &&
-            req.status === "broadcasting" &&
+            req.status === "pending" && // <-- changed from "broadcasting" to "pending"
             !req.assigned_carrier_id
           ) {
             setPendingRequest(req);
             setModalVisible(true);
-            console.log("[CarrierHome] Broadcast delivery_request:", req);
           } else if (req && req.assigned_carrier_id) {
-            // Hide modal if request is assigned
             setModalVisible(false);
             setPendingRequest(null);
           }
         }
       )
       .subscribe();
-    console.log(
-      "[CarrierHome] Subscribed to delivery-requests-broadcast-" + carrierType,
-      subscription
-    );
+    // Immediately force fetch after subscription setup
+    forceFetchRequests();
     return () => {
       supabase.removeChannel(subscription);
     };
@@ -534,6 +516,27 @@ const CarrierHome = () => {
     }
   };
 
+  // Force fetch function for available delivery requests
+  const forceFetchRequests = async () => {
+    if (!carrierType || !isOnline) return;
+    const { data: requests, error } = await supabase
+      .from("delivery_request")
+      .select("*")
+      .eq("carrier_type", carrierType)
+      .eq("status", "pending") // <-- changed from "broadcasting" to "pending"
+      .is("assigned_carrier_id", null)
+      .order("created_at", { ascending: false });
+    if (!error && requests && requests.length > 0) {
+      setPendingRequest(requests[0]);
+      setModalVisible(true);
+    }
+  };
+
+  // Call force fetch on mount and when toggling online
+  useEffect(() => {
+    forceFetchRequests();
+  }, [carrierType, isOnline]);
+
   // Fetch existing matching delivery requests on mount or when carrierType/isOnline changes
   useEffect(() => {
     const fetchExistingRequests = async () => {
@@ -542,7 +545,7 @@ const CarrierHome = () => {
         .from("delivery_request")
         .select("*")
         .eq("carrier_type", carrierType)
-        .eq("status", "broadcasting")
+        .eq("status", "pending") // <-- changed from "broadcasting" to "pending"
         .is("assigned_carrier_id", null)
         .order("created_at", { ascending: false });
       if (!error && requests && requests.length > 0) {
@@ -551,6 +554,15 @@ const CarrierHome = () => {
       }
     };
     fetchExistingRequests();
+  }, [carrierType, isOnline]);
+
+  // Polling fallback: query for new delivery requests every 5 seconds
+  useEffect(() => {
+    if (!carrierType || !isOnline) return;
+    const interval = setInterval(() => {
+      forceFetchRequests();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [carrierType, isOnline]);
 
   return (
@@ -1207,11 +1219,205 @@ const CarrierHome = () => {
               padding: 24,
               borderRadius: 16,
               alignItems: "center",
+              minWidth: 320,
+              maxWidth: 360,
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "bold" }}>
+            <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>
               New Delivery Request
             </Text>
+            {pendingRequest ? (
+              <View style={{ marginBottom: 16, width: "100%" }}>
+                {/* Group 1: Sender, Pickup, Item (no dividers between) */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <MaterialIcons
+                    name="person"
+                    size={18}
+                    color="#0DB760"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>Sender: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.sender_name || "-"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    marginTop: 8,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <Entypo
+                    name="location-pin"
+                    size={18}
+                    color="#e67e22"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>Pick up Address: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.sender_location || "-"}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    marginTop: 8,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <MaterialIcons
+                    name="inventory"
+                    size={18}
+                    color="#2980b9"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>Delivery Item: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.item_type || "-"}
+                  </Text>
+                </View>
+                {/* Divider 1 */}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: "#eee",
+                    marginVertical: 8,
+                  }}
+                />
+                {/* Price */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="cash"
+                    size={20}
+                    color="#27ae60"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>Price: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.price ? `₦${pendingRequest.price}` : "-"}
+                  </Text>
+                </View>
+                {/* Divider 2 */}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: "#eee",
+                    marginVertical: 8,
+                  }}
+                />
+                {/* Delivery Address */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <MaterialIcons
+                    name="place"
+                    size={18}
+                    color="#e74c3c"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>Delivery Address: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.receiver_location || "-"}
+                  </Text>
+                </View>
+                {/* Divider 3 */}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: "#eee",
+                    marginVertical: 8,
+                  }}
+                />
+                {/* ETA */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                    flexShrink: 1,
+                  }}
+                >
+                  <MaterialIcons
+                    name="timer"
+                    size={18}
+                    color="#8e44ad"
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontWeight: "bold" }}>ETA: </Text>
+                  <Text
+                    style={{
+                      fontWeight: "normal",
+                      flexShrink: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {pendingRequest.eta || "-"}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text>No delivery request details available.</Text>
+            )}
             <Text style={{ marginVertical: 12 }}>
               Do you want to accept this delivery?
             </Text>

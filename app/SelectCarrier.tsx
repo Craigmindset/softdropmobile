@@ -664,7 +664,7 @@ export default function SelectCarrierScreen() {
                     price: priceValue,
                     carrier_type: carrierType,
                     assigned_carrier_id: null, // <-- no carrier assigned yet
-                    status: "broadcasting", // <-- broadcasting status
+                    status: "pending", // <-- set to pending instead of broadcasting
                   };
                   console.log(
                     "[SelectCarrier] BROADCAST insertPayload:",
