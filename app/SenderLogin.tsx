@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import { useAppStateContext } from "./AppStateContext";
 
 const SenderLoginScreen = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -25,6 +26,7 @@ const SenderLoginScreen = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const router = useRouter();
+  const { state } = useAppStateContext();
 
   // Load cached phone number on mount
   React.useEffect(() => {
@@ -35,6 +37,10 @@ const SenderLoginScreen = () => {
   }, []);
 
   useEffect(() => {
+    if (state.isSenderLoggedIn) {
+      router.replace("/(tabs)/Home");
+      return;
+    }
     supabase.auth
       .getSession()
       .then(
@@ -51,7 +57,7 @@ const SenderLoginScreen = () => {
           // Do NOT redirect if not logged in!
         }
       );
-  }, []);
+  }, [state.isSenderLoggedIn, router]);
 
   const handlePhoneNumberChange = (text: string) => {
     // Only allow numbers and limit to 11 digits
@@ -90,6 +96,21 @@ const SenderLoginScreen = () => {
         Alert.alert(
           "Login Failed",
           error.message || "Incorrect phone number or password."
+        );
+        return;
+      }
+
+      // Check if user exists in sender_profile
+      const { data: senderProfile, error: senderProfileError } = await supabase
+        .from("sender_profile")
+        .select("user_id")
+        .eq("user_id", data.user.id)
+        .single();
+      if (senderProfileError || !senderProfile) {
+        await supabase.auth.signOut();
+        Alert.alert(
+          "Access Denied",
+          "Your account is not registered as a sender. Please contact support."
         );
         return;
       }

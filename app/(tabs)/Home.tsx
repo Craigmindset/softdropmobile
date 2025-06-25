@@ -6,6 +6,7 @@ import {
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -66,6 +67,10 @@ const Home = () => {
       if (data) {
         setProfileImage(data.profile_image_url || null);
         setFirstName(data.first_name || null);
+        console.log(
+          "[Profile Fetch] profile_image_url:",
+          data.profile_image_url
+        );
       }
       // Check if welcome modal has been shown for this user
       const flag = await AsyncStorage.getItem(`welcomeModalShown:${user.id}`);
@@ -121,6 +126,76 @@ const Home = () => {
       await AsyncStorage.setItem(`welcomeModalShown:${user.id}`, "1");
     }
     setShowWelcomeModal(false);
+  };
+
+  // Image picker and upload handler
+  const handlePickAndUploadImage = async () => {
+    // Request permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow access to your photos.");
+      return;
+    }
+    // Pick image
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const fileName = `profile_${Date.now()}.jpg`;
+      console.log("[Upload] Picked file uri:", uri);
+      // Upload to Supabase Storage
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        console.log(
+          "[Upload] Uploading file:",
+          fileName,
+          "to bucket: image-bucket"
+        );
+        const { data: uploadData, error } = await supabase.storage
+          .from("image-bucket")
+          .upload(fileName, blob, { upsert: true });
+        console.log("[Upload] uploadData:", uploadData, "error:", error);
+        if (error) {
+          Alert.alert("Upload failed", error.message);
+          return;
+        }
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from("image-bucket")
+          .getPublicUrl(fileName);
+        console.log("[Upload] publicUrl:", publicUrlData.publicUrl);
+        // Update sender_profile with new image URL
+        const user = (await supabase.auth.getUser()).data.user;
+        if (!user) {
+          console.log("[Upload] No user found for updating sender_profile");
+          return;
+        }
+        const { error: updateError } = await supabase
+          .from("sender_profile")
+          .update({ profile_image_url: publicUrlData.publicUrl })
+          .eq("user_id", user.id);
+        if (updateError) {
+          console.log("[Upload] Error updating sender_profile:", updateError);
+        } else {
+          console.log(
+            "[Upload] sender_profile updated with:",
+            publicUrlData.publicUrl
+          );
+        }
+        // Update local state to show new image immediately
+        setProfileImage(publicUrlData.publicUrl);
+        Alert.alert("Profile updated", "Your profile image has been updated.");
+      } catch (err) {
+        console.log("[Upload] Exception during upload:", err);
+        Alert.alert("Upload failed", String(err));
+      }
+    }
   };
 
   return (
@@ -211,14 +286,16 @@ const Home = () => {
           ]}
         >
           <View style={styles.profileSection}>
-            <Image
-              source={
-                profileImage
-                  ? { uri: profileImage }
-                  : require("../../assets/images/craig.jpg")
-              }
-              style={styles.avatar}
-            />
+            <TouchableOpacity onPress={handlePickAndUploadImage}>
+              <Image
+                source={
+                  profileImage
+                    ? { uri: profileImage }
+                    : require("../../assets/images/craig.jpg")
+                }
+                style={styles.avatar}
+              />
+            </TouchableOpacity>
             <View>
               <Text style={styles.userName}>
                 Hello,{" "}

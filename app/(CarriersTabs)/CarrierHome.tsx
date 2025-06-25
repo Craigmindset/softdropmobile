@@ -5,6 +5,7 @@ import {
   MaterialCommunityIcons,
   MaterialIcons,
 } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -28,6 +29,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { useOnlineStatus } from "../OnlineStatusContext";
 
@@ -48,6 +50,7 @@ const CarrierHome = () => {
   );
   const [userId, setUserId] = useState<string | null>(null);
   const [carrierType, setCarrierType] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   const router = useRouter();
 
@@ -238,13 +241,24 @@ const CarrierHome = () => {
     }
   };
 
-  // Fetch profile image and name on mount and refresh
+  // Fetch profile image, name, and user short code on mount and refresh
   const fetchProfileData = async () => {
     const {
       data: { user },
-      error,
     } = await supabase.auth.getUser();
     if (user) {
+      setUserId(user.id.toUpperCase());
+      // Try to get cached profile
+      const cacheKey = `carrier_profile_${user.id}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setProfileImage(parsed.profile_image_url || null);
+          setProfileName(parsed.first_name || null);
+        } catch (e) {}
+      }
+      // Always fetch latest in background
       const { data, error } = await supabase
         .from("carrier_profile")
         .select("profile_image_url, first_name")
@@ -253,6 +267,7 @@ const CarrierHome = () => {
       if (data) {
         setProfileImage(data.profile_image_url || null);
         setProfileName(data.first_name || null);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
       }
     }
   };
@@ -566,892 +581,935 @@ const CarrierHome = () => {
   }, [carrierType, isOnline]);
 
   return (
-    <>
-      <StatusBar style="light" backgroundColor={HEADER_BG} translucent={true} />
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0d1117" }}>
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: HEADER_BG,
-              paddingTop:
-                (Platform.OS === "android"
-                  ? RNStatusBar.currentHeight || 24
-                  : 44) + 12,
-            },
-          ]}
-        >
-          <View style={styles.profileSection}>
-            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7}>
-              <Image
-                source={
-                  profileImage
-                    ? { uri: profileImage }
-                    : require("../../assets/images/craig.jpg")
-                }
-                style={styles.avatar}
-              />
-            </TouchableOpacity>
-            <View>
-              <Text style={styles.userName}>
-                Hello, {profileName ? profileName : "there"}
-              </Text>
-              <Text style={styles.userId}>
-                User ID: {userId ? userId.substring(0, 5) : "-----"}
-              </Text>
-            </View>
-            {/* Online/Offline Toggle */}
-            <TouchableOpacity
-              style={styles.toggleContainer}
-              onPress={handleToggleOnline}
-              activeOpacity={0.7}
-              disabled={toggleLoading} // <-- Disable while loading
-            >
-              <View
-                style={[
-                  styles.statusDot,
-                  isOnline
-                    ? {
-                        backgroundColor: blink ? "#00FF00" : "#00FF0080",
-                      }
-                    : { backgroundColor: "#FF2D2D" },
-                ]}
-              />
-              {toggleLoading ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#fff"
-                  style={{ marginLeft: 5 }}
-                />
-              ) : (
-                <Text style={styles.toggleText}>
-                  {isOnline ? "You are Online" : "Gone Offline"}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity
-              onPress={() => {
-                // TODO: Implement QR code scanner/camera activation here
-                Alert.alert(
-                  "QR Scanner",
-                  "Camera/QR scanning would be activated here."
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="qr-code" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={{ paddingTop: 0 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#0B4D1C"
-              colors={["#0B4D1C"]}
-            />
-          }
-        >
-          {/* Digital Rewards */}
+    <ScrollView
+      contentContainerStyle={{ flexGrow: 1, backgroundColor: HEADER_BG }}
+    >
+      <>
+        <StatusBar
+          style="light"
+          backgroundColor={HEADER_BG}
+          translucent={true}
+        />
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#0d1117" }}>
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 10,
-            }}
+            style={[
+              styles.header,
+              {
+                backgroundColor: HEADER_BG,
+                paddingTop:
+                  (Platform.OS === "android"
+                    ? RNStatusBar.currentHeight || 24
+                    : 44) + 12,
+              },
+            ]}
           >
-            {/* Digital Rewards Button */}
-            <TouchableOpacity style={styles.rewardsButton}>
-              <Text style={styles.rewardsText}>Digital rewards ⭐</Text>
-            </TouchableOpacity>
-            {/* Icons Row */}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <TouchableOpacity style={{ marginHorizontal: 6 }}>
-                <Ionicons name="notifications-outline" size={18} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity style={{ marginHorizontal: 6 }}>
-                <MaterialIcons name="support-agent" size={18} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity style={{ marginHorizontal: 6 }}>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={18}
-                  color="#fff"
+            <View style={styles.profileSection}>
+              <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7}>
+                <Image
+                  source={
+                    profileImage
+                      ? { uri: profileImage }
+                      : require("../../assets/images/craig.jpg")
+                  }
+                  style={styles.avatar}
                 />
+              </TouchableOpacity>
+              <View>
+                <Text style={styles.userName}>
+                  Hello, {profileName ? profileName : "there"}
+                </Text>
+                <Text style={styles.userId}>
+                  User ID: {userId ? userId.substring(0, 5) : "-----"}
+                </Text>
+              </View>
+              {/* Online/Offline Toggle */}
+              <TouchableOpacity
+                style={styles.toggleContainer}
+                onPress={handleToggleOnline}
+                activeOpacity={0.7}
+                disabled={toggleLoading}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    isOnline
+                      ? {
+                          backgroundColor: blink ? "#00FF00" : "#00FF0080",
+                        }
+                      : { backgroundColor: "#FF2D2D" },
+                  ]}
+                />
+                {toggleLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#fff"
+                    style={{ marginLeft: 5 }}
+                  />
+                ) : (
+                  <Text style={styles.toggleText}>
+                    {isOnline ? "You are Online" : "Gone Offline"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            <View
+              style={[styles.headerIcons, { paddingRight: insets.right || 16 }]}
+            >
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    "QR Scanner",
+                    "Camera/QR scanning would be activated here."
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="qr-code" size={24} color="white" />
               </TouchableOpacity>
             </View>
           </View>
-          {/* Wallet */}
-          <View style={styles.walletCard}>
+          {/* Digital Rewards and rest of content... */}
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={{ paddingTop: 0 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#0B4D1C"
+                colors={["#0B4D1C"]}
+              />
+            }
+          >
+            {/* Digital Rewards */}
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
-                marginBottom: 6,
+                marginTop: 10,
               }}
             >
-              <Text style={[styles.walletTitle, { fontSize: 12 }]}>
-                Smart Wallet
-              </Text>
+              {/* Digital Rewards Button */}
+              <TouchableOpacity style={styles.rewardsButton}>
+                <Text style={styles.rewardsText}>Digital rewards ⭐</Text>
+              </TouchableOpacity>
+              {/* Icons Row */}
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text
-                  style={[
-                    styles.walletNumber,
-                    { marginLeft: 0, marginBottom: 0 },
-                  ]}
-                >
-                  38231112378
+                <TouchableOpacity style={{ marginHorizontal: 6 }}>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity style={{ marginHorizontal: 6 }}>
+                  <MaterialIcons name="support-agent" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={{ marginHorizontal: 6 }}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {/* Wallet */}
+            <View style={styles.walletCard}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                }}
+              >
+                <Text style={[styles.walletTitle, { fontSize: 12 }]}>
+                  Smart Wallet
                 </Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text
+                    style={[
+                      styles.walletNumber,
+                      { marginLeft: 0, marginBottom: 0 },
+                    ]}
+                  >
+                    38231112378
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Clipboard.setStringAsync("38231112378");
+                      if (Platform.OS === "android") {
+                        ToastAndroid.show(
+                          "Copied to clipboard!",
+                          ToastAndroid.SHORT
+                        );
+                      } else {
+                        Alert.alert("Copied to clipboard!");
+                      }
+                    }}
+                    style={{ marginLeft: 8 }}
+                  >
+                    <Ionicons name="copy-outline" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Balance Section */}
+              <View style={styles.balanceSection}>
+                <View style={styles.balanceBox}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={styles.balanceTitle}>Available Balance</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowBalance((prev) => !prev)}
+                    >
+                      <Ionicons
+                        name={showBalance ? "eye-outline" : "eye-off-outline"}
+                        size={14}
+                        color="gray"
+                        style={{ marginLeft: 6 }}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.balanceAmount}>
+                    {showBalance ? "₦130,000.02" : "******"}
+                  </Text>
+                </View>
+                <View style={styles.balanceBox}>
+                  <View style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Text style={styles.balanceTitle}>escrow account</Text>
+                    <Text
+                      style={[
+                        styles.balanceAmount,
+                        { fontSize: 14, marginTop: 4, marginRight: 10 },
+                      ]}
+                    >
+                      ₦25,000.00
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.actionsRow}>
+                <TouchableOpacity style={styles.actionBtn}>
+                  <Text style={styles.actionText}>Transfer</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => {
-                    Clipboard.setStringAsync("38231112378");
-                    if (Platform.OS === "android") {
-                      ToastAndroid.show(
-                        "Copied to clipboard!",
-                        ToastAndroid.SHORT
-                      );
-                    } else {
-                      Alert.alert("Copied to clipboard!");
-                    }
-                  }}
-                  style={{ marginLeft: 8 }}
+                  style={styles.plusBtn}
+                  onPress={() => router.push("/wallet/AddFunds")}
                 >
-                  <Ionicons name="copy-outline" size={16} color="#fff" />
+                  <Text style={styles.plusText}>+</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn}>
+                  <Text style={styles.actionText}>Withdraw Fund</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Balance Section */}
-            <View style={styles.balanceSection}>
-              <View style={styles.balanceBox}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Text style={styles.balanceTitle}>Available Balance</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowBalance((prev) => !prev)}
-                  >
-                    <Ionicons
-                      name={showBalance ? "eye-outline" : "eye-off-outline"}
-                      size={14}
-                      color="gray"
-                      style={{ marginLeft: 6 }}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.balanceAmount}>
-                  {showBalance ? "₦130,000.02" : "******"}
-                </Text>
-              </View>
-              <View style={styles.balanceBox}>
-                <View style={{ flex: 1, alignItems: "flex-end" }}>
-                  <Text style={styles.balanceTitle}>escrow account</Text>
-                  <Text
-                    style={[
-                      styles.balanceAmount,
-                      { fontSize: 14, marginTop: 4, marginRight: 10 },
-                    ]}
-                  >
-                    ₦25,000.00
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Text style={styles.actionText}>Transfer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.plusBtn}>
-                <Text style={styles.plusText}>+</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Text style={styles.actionText}>Withdraw Fund</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Start my Ride Section */}
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 15,
-              padding: 20,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 20,
-              marginBottom: 20,
-            }}
-          >
-            <TouchableOpacity
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                opacity: isOnline ? 1 : 0.5, // visually indicate offline state
-              }}
-              onPress={() => {
-                // Only navigate, do NOT set online here
-                router.push("/CarrierLocation");
-              }}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="steering"
-                size={22}
-                color="#0B4D1C"
-                style={{ marginRight: 8 }}
-              />
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "bold",
-                  color: "#0B4D1C",
-                }}
-              >
-                {isOnline ? "End my Ride" : "Start my Ride"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "#0B4D1C",
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 20,
-                marginLeft: 16, // <-- Add this line for spacing between the two buttons
-              }}
-              onPress={() => {
-                router.push("/Navigation");
-              }}
-            >
-              <MaterialIcons name="navigation" size={18} color="#fff" />
-              <Text
-                style={{ color: "#fff", marginLeft: 8, fontWeight: "bold" }}
-              >
-                Use Navigation
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Finance & Rewards */}
-          <Text style={[styles.sectionTitle, { fontSize: 12 }]}>
-            Finance & Rewards
-          </Text>
-          <View
-            style={[
-              styles.rowContainer,
-              {
-                flexWrap: "nowrap",
-                paddingLeft: 8,
-                paddingRight: 8,
-                justifyContent: "space-between",
-                backgroundColor: "white",
-                paddingVertical: 15,
-
-                flexDirection: "column",
-                flex: 1,
-              },
-            ]}
-          >
+            {/* Start my Ride Section */}
             <View
               style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
                 backgroundColor: "white",
-                marginTop: 20,
-              }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <Entypo name="location-pin" size={20} color="orangered" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                  }}
-                >
-                  Softpay
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>smart wallet</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <FontAwesome name="cutlery" size={18} color="salmon" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Rewards
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>earned points</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="wallet-giftcard" size={20} color="gold" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Wallet
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>e-wallet</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="savings" size={20} color="tomato" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Box Save
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>
-                  locked savings
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {/* Additional Actions */}
-            <View
-              style={{
+                borderRadius: 15,
+                padding: 20,
                 flexDirection: "row",
-                justifyContent: "space-between",
                 alignItems: "center",
-                backgroundColor: "white",
-                marginTop: 20,
-              }}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <Entypo name="mobile" size={20} color="orangered" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Airtime
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>Recharge</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <Entypo name="network" size={18} color="salmon" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Data Bundle
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>
-                  Internet Service
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="sports-football" size={20} color="gold" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Betting
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>betting topup</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="movie" size={20} color="tomato" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Movies
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>Book a Ticket</Text>
-              </TouchableOpacity>
-            </View>
-            {/* Repeat the grid items for the second row ------------------------------------*/}
-            <View
-              style={{
-                flexDirection: "row",
                 justifyContent: "space-between",
-                alignItems: "center",
-                backgroundColor: "white",
                 marginTop: 20,
                 marginBottom: 20,
               }}
             >
               <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: isOnline ? 1 : 0.5, // visually indicate offline state
+                }}
+                onPress={() => {
+                  // Only navigate, do NOT set online here
+                  router.push("/CarrierLocation");
+                }}
+                activeOpacity={0.7}
               >
-                <MaterialIcons name="flight" size={20} color="orangered" />
+                <MaterialCommunityIcons
+                  name="steering"
+                  size={22}
+                  color="#0B4D1C"
+                  style={{ marginRight: 8 }}
+                />
                 <Text
                   style={{
-                    letterSpacing: -0.5,
+                    fontSize: 16,
                     fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
+                    color: "#0B4D1C",
                   }}
                 >
-                  Flight
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>
-                  Flight Booking
+                  {isOnline ? "End my Ride" : "Start my Ride"}
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "#0B4D1C",
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: 20,
+                  marginLeft: 16, // <-- Add this line for spacing between the two buttons
+                }}
+                onPress={() => {
+                  router.push("/Navigation");
+                }}
               >
-                <MaterialIcons name="hotel" size={18} color="salmon" />
+                <MaterialIcons name="navigation" size={18} color="#fff" />
                 <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
+                  style={{ color: "#fff", marginLeft: 8, fontWeight: "bold" }}
                 >
-                  Hotels
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>Reservations</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="directions-car" size={20} color="gold" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Smart Ride
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>Ride Booking</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.gridItem,
-                  {
-                    flexDirection: "column",
-                    alignItems: "center",
-                    flex: 1,
-                    marginHorizontal: 2,
-                  },
-                ]}
-              >
-                <MaterialIcons name="emoji-people" size={20} color="tomato" />
-                <Text
-                  style={{
-                    letterSpacing: -0.5,
-                    fontWeight: "bold",
-                    fontSize: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  Enterprise
-                </Text>
-                <Text style={{ fontSize: 8, marginTop: 0 }}>
-                  Global Connect
+                  Use Navigation
                 </Text>
               </TouchableOpacity>
             </View>
-            {/* </ Finance & Rewards Grid 4-------------------------------------------------*/}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.4)",
-          }}
-        >
+
+            {/* Finance & Rewards */}
+            <Text style={[styles.sectionTitle, { fontSize: 12 }]}>
+              Finance & Rewards
+            </Text>
+            <View
+              style={[
+                styles.rowContainer,
+                {
+                  flexWrap: "nowrap",
+                  paddingLeft: 8,
+                  paddingRight: 8,
+                  justifyContent: "space-between",
+                  backgroundColor: "white",
+                  paddingVertical: 15,
+                  marginBottom: 120,
+                  flexDirection: "column",
+                  flex: 1,
+                },
+              ]}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: "white",
+                  marginTop: 20,
+                }}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <Entypo name="location-pin" size={20} color="orangered" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                    }}
+                  >
+                    Softpay
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    smart wallet
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <FontAwesome name="cutlery" size={18} color="salmon" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Rewards
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    earned points
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="wallet-giftcard"
+                    size={20}
+                    color="gold"
+                  />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Wallet
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>e-wallet</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="savings" size={20} color="tomato" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Box Save
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    locked savings
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* Additional Actions */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: "white",
+                  marginTop: 20,
+                }}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <Entypo name="mobile" size={20} color="orangered" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Airtime
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>Recharge</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <Entypo name="network" size={18} color="salmon" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Data Bundle
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Internet Service
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="sports-football"
+                    size={20}
+                    color="gold"
+                  />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Betting
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    betting topup
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="movie" size={20} color="tomato" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Movies
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Book a Ticket
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* Repeat the grid items for the second row ------------------------------------*/}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: "white",
+                  marginTop: 20,
+                  marginBottom: 20,
+                }}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="flight" size={20} color="orangered" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Flight
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Flight Booking
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="hotel" size={18} color="salmon" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Hotels
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Reservations
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="directions-car" size={20} color="gold" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Smart Ride
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Ride Booking
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.gridItem,
+                    {
+                      flexDirection: "column",
+                      alignItems: "center",
+                      flex: 1,
+                      marginHorizontal: 2,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="emoji-people" size={20} color="tomato" />
+                  <Text
+                    style={{
+                      letterSpacing: -0.5,
+                      fontWeight: "bold",
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Enterprise
+                  </Text>
+                  <Text style={{ fontSize: 8, marginTop: 0 }}>
+                    Global Connect
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {/* </ Finance & Rewards Grid 4-------------------------------------------------*/}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+        <Modal visible={modalVisible} transparent animationType="slide">
           <View
             style={{
-              backgroundColor: "#fff",
-              padding: 24,
-              borderRadius: 16,
+              flex: 1,
+              justifyContent: "center",
               alignItems: "center",
-              minWidth: 320,
-              maxWidth: 360,
+              backgroundColor: "rgba(0,0,0,0.4)",
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>
-              New Delivery Request
-            </Text>
-            {pendingRequest ? (
-              <View style={{ marginBottom: 16, width: "100%" }}>
-                {/* Group 1: Sender, Pickup, Item (no dividers between) */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <MaterialIcons
-                    name="person"
-                    size={18}
-                    color="#0DB760"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>Sender: </Text>
-                  <Text
+            <View
+              style={{
+                backgroundColor: "#fff",
+                padding: 24,
+                borderRadius: 16,
+                alignItems: "center",
+                minWidth: 320,
+                maxWidth: 360,
+              }}
+            >
+              <Text
+                style={{ fontSize: 18, fontWeight: "bold", marginBottom: 8 }}
+              >
+                New Delivery Request
+              </Text>
+              {pendingRequest ? (
+                <View style={{ marginBottom: 16, width: "100%" }}>
+                  {/* Group 1: Sender, Pickup, Item (no dividers between) */}
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.sender_name || "-"}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    marginTop: 8,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <Entypo
-                    name="location-pin"
-                    size={18}
-                    color="#e67e22"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>Pick up Address: </Text>
-                  <Text
+                    <MaterialIcons
+                      name="person"
+                      size={18}
+                      color="#0DB760"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>Sender: </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.sender_name || "-"}
+                    </Text>
+                  </View>
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
+                      marginTop: 8,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.sender_location || "-"}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    marginTop: 8,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <MaterialIcons
-                    name="inventory"
-                    size={18}
-                    color="#2980b9"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>Delivery Item: </Text>
-                  <Text
+                    <Entypo
+                      name="location-pin"
+                      size={18}
+                      color="#e67e22"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>
+                      Pick up Address:{" "}
+                    </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.pickup_address || "-"}
+                    </Text>
+                  </View>
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
+                      marginTop: 8,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.item_type || "-"}
-                  </Text>
-                </View>
-                {/* Divider 1 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#eee",
-                    marginVertical: 8,
-                  }}
-                />
-                {/* Price */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <MaterialCommunityIcons
-                    name="cash"
-                    size={20}
-                    color="#27ae60"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>Price: </Text>
-                  <Text
+                    <MaterialIcons
+                      name="inventory"
+                      size={18}
+                      color="#2980b9"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>Delivery Item: </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.item_type || "-"}
+                    </Text>
+                  </View>
+                  {/* Divider 1 */}
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      height: 1,
+                      backgroundColor: "#eee",
+                      marginVertical: 8,
+                    }}
+                  />
+                  {/* Price */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.price ? `₦${pendingRequest.price}` : "-"}
-                  </Text>
-                </View>
-                {/* Divider 2 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#eee",
-                    marginVertical: 8,
-                  }}
-                />
-                {/* Delivery Address */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <MaterialIcons
-                    name="place"
-                    size={18}
-                    color="#e74c3c"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>Delivery Address: </Text>
-                  <Text
+                    <MaterialCommunityIcons
+                      name="cash"
+                      size={20}
+                      color="#27ae60"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>Price: </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.price ? `₦${pendingRequest.price}` : "-"}
+                    </Text>
+                  </View>
+                  {/* Divider 2 */}
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      height: 1,
+                      backgroundColor: "#eee",
+                      marginVertical: 8,
+                    }}
+                  />
+                  {/* Delivery Address */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.receiver_location || "-"}
-                  </Text>
-                </View>
-                {/* Divider 3 */}
-                <View
-                  style={{
-                    height: 1,
-                    backgroundColor: "#eee",
-                    marginVertical: 8,
-                  }}
-                />
-                {/* ETA */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 6,
-                    flexWrap: "wrap",
-                    flexShrink: 1,
-                  }}
-                >
-                  <MaterialIcons
-                    name="timer"
-                    size={18}
-                    color="#8e44ad"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontWeight: "bold" }}>ETA: </Text>
-                  <Text
+                    <MaterialIcons
+                      name="place"
+                      size={18}
+                      color="#e74c3c"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>
+                      Delivery Address:{" "}
+                    </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.receiver_location || "-"}
+                    </Text>
+                  </View>
+                  {/* Divider 3 */}
+                  <View
                     style={{
-                      fontWeight: "normal",
-                      flexShrink: 1,
+                      height: 1,
+                      backgroundColor: "#eee",
+                      marginVertical: 8,
+                    }}
+                  />
+                  {/* ETA */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 6,
                       flexWrap: "wrap",
+                      flexShrink: 1,
                     }}
                   >
-                    {pendingRequest.eta || "-"}
-                  </Text>
+                    <MaterialIcons
+                      name="timer"
+                      size={18}
+                      color="#8e44ad"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={{ fontWeight: "bold" }}>ETA: </Text>
+                    <Text
+                      style={{
+                        fontWeight: "normal",
+                        flexShrink: 1,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {pendingRequest.eta || "-"}
+                    </Text>
+                  </View>
                 </View>
+              ) : (
+                <Text>No delivery request details available.</Text>
+              )}
+              <Text style={{ marginVertical: 12 }}>
+                Do you want to accept this delivery?
+              </Text>
+              <View style={{ flexDirection: "row", gap: 16 }}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#0DB760",
+                    padding: 12,
+                    borderRadius: 8,
+                    marginRight: 10,
+                  }}
+                  onPress={() => handleCarrierResponse("accepted")}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                    Accept
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#e74c3c",
+                    padding: 12,
+                    borderRadius: 8,
+                  }}
+                  onPress={() => handleCarrierResponse("declined")}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                    Decline
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <Text>No delivery request details available.</Text>
-            )}
-            <Text style={{ marginVertical: 12 }}>
-              Do you want to accept this delivery?
-            </Text>
-            <View style={{ flexDirection: "row", gap: 16 }}>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#0DB760",
-                  padding: 12,
-                  borderRadius: 8,
-                  marginRight: 10,
-                }}
-                onPress={() => handleCarrierResponse("accepted")}
-              >
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                  Accept
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#e74c3c",
-                  padding: 12,
-                  borderRadius: 8,
-                }}
-                onPress={() => handleCarrierResponse("declined")}
-              >
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                  Decline
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-    </>
+        </Modal>
+      </>
+    </ScrollView>
   );
 };
 
@@ -1493,6 +1551,7 @@ const styles = StyleSheet.create({
   headerIcons: {
     flexDirection: "row",
     marginRight: 25,
+    paddingRight: 12, // add this
   },
   rewardsButton: {
     marginTop: 10,

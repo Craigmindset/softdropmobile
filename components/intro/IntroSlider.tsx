@@ -18,7 +18,8 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { IntroPagination } from "./IntroPagination";
 import { IntroSlide } from "./IntroSlide";
 
-export function IntroSlider() {
+// Add onDone prop
+export function IntroSlider({ onDone }: { onDone?: () => void }) {
   const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const slidesRef = useRef<FlatList>(null);
@@ -34,10 +35,14 @@ export function IntroSlider() {
     []
   );
 
+  // Call onDone if provided, otherwise fallback to router.replace
   const onGetStarted = useCallback(() => {
-    // Navigate to the divider screen
-    router.replace("/divider");
-  }, []);
+    if (onDone) {
+      onDone();
+    } else {
+      router.replace("/divider");
+    }
+  }, [onDone]);
 
   return (
     <View style={styles.container}>

@@ -1,11 +1,14 @@
 import { AntDesign } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BlurView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import LottieView from "lottie-react-native";
 import React, { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   StyleSheet,
@@ -16,13 +19,17 @@ import {
 } from "react-native";
 // Update the import path below to the correct relative path where supabase.ts is located
 import { supabase } from "../lib/supabase";
+import { useAppStateContext } from "./AppStateContext";
 
 const CarrierLogin = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const router = useRouter();
   const { fromSignup } = useLocalSearchParams();
+  const { state } = useAppStateContext();
 
   // Load cached phone number on mount
   React.useEffect(() => {
@@ -31,6 +38,31 @@ const CarrierLogin = () => {
       if (cachedPhone) setPhoneNumber(cachedPhone);
     })();
   }, []);
+
+  React.useEffect(() => {
+    if (state.isCarrierLoggedIn) {
+      router.replace("/CarrierHome");
+      return;
+    }
+    supabase.auth
+      .getSession()
+      .then(
+        ({
+          data,
+        }: {
+          data: { session: import("@supabase/supabase-js").Session | null };
+        }) => {
+          const { session } = data;
+          if (session) {
+            // User is already logged in, route to carrier home
+            router.replace("/CarrierHome");
+          }
+        }
+      )
+      .catch((error) => {
+        console.error("Error fetching session:", error);
+      });
+  }, [state.isCarrierLoggedIn, router]);
 
   const handlePhoneNumberChange = (text: string) => {
     // Only allow numbers and limit to 11 digits
@@ -74,9 +106,37 @@ const CarrierLogin = () => {
         );
         return;
       }
-      await AsyncStorage.setItem("cachedPhoneNumber", phoneNumber); // Cache phone number
-      Alert.alert("Login Successful", "Welcome!");
-      router.push("/CarrierHome"); // Navigate to Carrier Home
+
+      // Check if user exists in carrier_profile
+      const { data: carrierProfile, error: carrierProfileError } =
+        await supabase
+          .from("carrier_profile")
+          .select("user_id")
+          .eq("user_id", data.user.id)
+          .single();
+      if (carrierProfileError || !carrierProfile) {
+        await supabase.auth.signOut();
+        Alert.alert(
+          "Access Denied",
+          "Your account is not registered as a carrier. Please contact support."
+        );
+        return;
+      }
+
+      // Check if first time login
+      const hasLoggedIn = await AsyncStorage.getItem("carrierHasLoggedIn");
+      if (!hasLoggedIn) {
+        setWelcomeMessage("Login Successful! Welcome to SoftDrop");
+        await AsyncStorage.setItem("carrierHasLoggedIn", "true");
+      } else {
+        setWelcomeMessage("Making every, Move Count\nWelcome Back");
+      }
+      await AsyncStorage.setItem("cachedPhoneNumber", phoneNumber);
+      setShowSuccessModal(true);
+      setTimeout(() => {
+        setShowSuccessModal(false);
+        router.push("/CarrierHome");
+      }, 2200); // Show modal for 2.2 seconds
     } catch (e) {
       Alert.alert("Login Failed", "Unexpected error. Please try again.");
       console.error("[Supabase Login Error]", e);
@@ -85,6 +145,30 @@ const CarrierLogin = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Success Modal with Lottie */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <LottieView
+              source={require("../assets/images/smiles.json")}
+              autoPlay
+              loop={false}
+              style={{ width: 120, height: 120 }}
+            />
+            <Text style={styles.modalText}>{welcomeMessage}</Text>
+          </View>
+        </View>
+      </Modal>
+      {/* Blur background when modal is visible */}
+      {showSuccessModal ? (
+        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
+      ) : null}
+
       <StatusBar style="dark" backgroundColor="#fff" />
       {/* Back Icon */}
       {fromSignup !== "true" && (
@@ -266,6 +350,27 @@ const styles = StyleSheet.create({
     color: "#aaa",
     textAlign: "right",
     marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)", // Dimmed background
+  },
+  modalContent: {
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 220,
+    minHeight: 220,
+    backgroundColor: "#fff",
+  },
+  modalText: {
+    marginTop: 16,
+    fontSize: 18,
+    textAlign: "center",
+    color: "#333",
   },
 });
 

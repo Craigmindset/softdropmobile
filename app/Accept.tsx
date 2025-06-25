@@ -5,14 +5,17 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "../lib/supabase";
 
 const Accept = () => {
   const params = useLocalSearchParams();
@@ -26,9 +29,39 @@ const Accept = () => {
   const deliveryAddress = params.deliveryAddress || "-";
   const receiverName = params.receiverName || "-";
   const price = params.price || "-";
+  const carrierId = params.carrierId;
+
+  const [carrierImageUrl, setCarrierImageUrl] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchCarrierImage = async () => {
+    if (carrierId) {
+      const { data } = await supabase
+        .from("carrier_profile")
+        .select("profile_image_url")
+        .eq("user_id", carrierId)
+        .single();
+      setCarrierImageUrl(data?.profile_image_url || null);
+    }
+  };
+
+  useEffect(() => {
+    fetchCarrierImage();
+  }, [carrierId]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchCarrierImage();
+    setRefreshing(false);
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
+    <ScrollView
+      contentContainerStyle={styles.scrollContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -42,7 +75,9 @@ const Accept = () => {
           <View style={styles.avatarContainer}>
             <Image
               source={{
-                uri: "https://randomuser.me/api/portraits/women/44.jpg",
+                uri:
+                  carrierImageUrl ||
+                  "https://zrjlrprxfkhbgjruvyxq.supabase.co/storage/v1/object/public/image-bucket//iconprofile.jpg",
               }}
               style={styles.avatar}
             />
@@ -166,6 +201,17 @@ const Accept = () => {
         <TouchableOpacity style={styles.paymentButton}>
           <Text style={styles.paymentButtonText}>Make Payment</Text>
         </TouchableOpacity>
+        {/* Cancel Request Button */}
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => {
+            // TODO: Add your cancel request logic here
+            // For example, update the delivery_request status in Supabase
+            alert("Request cancelled!");
+          }}
+        >
+          <Text style={styles.cancelButtonText}>Cancel Request</Text>
+        </TouchableOpacity>
         <View style={{ height: 40 }} />
       </View>
     </ScrollView>
@@ -245,6 +291,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   paymentButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  cancelButton: {
+    backgroundColor: "#e74c3c",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  cancelButtonText: {
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
