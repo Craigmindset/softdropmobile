@@ -304,7 +304,7 @@ const FindCarrier = () => {
   return (
     <>
       <StatusBar
-        barStyle="light-content"
+        barStyle="dark-content"
         translucent={true}
         backgroundColor="transparent"
       />

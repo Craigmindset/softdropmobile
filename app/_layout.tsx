@@ -78,6 +78,14 @@ export default function RootLayout() {
             <Stack.Screen name="Home" options={{ headerShown: false }} />
             <Stack.Screen name="FindCarrier" options={{ headerShown: false }} />
             <Stack.Screen
+              name="wallet/SenderAddFunds"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="wallet/SenderPayment"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="wallet/Payment"
               options={{ headerShown: false }}
             />

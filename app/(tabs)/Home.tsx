@@ -5,13 +5,14 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import * as NavigationBar from "expo-navigation-bar";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import LottieView from "lottie-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   BackHandler,
@@ -56,6 +57,17 @@ const Home = () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
+      // Try to get cached profile first
+      const cacheKey = `sender_profile_${user.id}`;
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setProfileImage(parsed.profile_image_url || null);
+          setFirstName(parsed.first_name || null);
+        } catch (e) {}
+      }
+      // Always fetch latest in background
       // Generate a short code from user_id (last 5 chars, uppercase, fallback to '00000')
       const shortCode = user.id ? user.id.slice(-5).toUpperCase() : "00000";
       setUserShortCode(shortCode);
@@ -67,10 +79,7 @@ const Home = () => {
       if (data) {
         setProfileImage(data.profile_image_url || null);
         setFirstName(data.first_name || null);
-        console.log(
-          "[Profile Fetch] profile_image_url:",
-          data.profile_image_url
-        );
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
       }
       // Check if welcome modal has been shown for this user
       const flag = await AsyncStorage.getItem(`welcomeModalShown:${user.id}`);
@@ -81,9 +90,14 @@ const Home = () => {
     }
   };
 
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileData();
+      return () => {
+        // Cleanup if needed
+      };
+    }, [])
+  );
 
   // Pull-to-refresh handler
   const onRefresh = async () => {
@@ -448,7 +462,10 @@ const Home = () => {
                 <TouchableOpacity style={styles.actionBtn}>
                   <Text style={styles.actionText}>Transfer</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.plusBtn}>
+                <TouchableOpacity
+                  style={styles.plusBtn}
+                  onPress={() => router.push("/wallet/SenderAddFunds")}
+                >
                   <Text style={styles.plusText}>+</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn}>
