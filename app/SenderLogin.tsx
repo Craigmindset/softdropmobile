@@ -2,6 +2,7 @@ import { AntDesign } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import LottieView from "lottie-react-native";
 import React, { useEffect, useState } from "react";
 import {
@@ -136,6 +137,7 @@ const SenderLoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" backgroundColor="#fff" />
       {/* Success Modal with Lottie */}
       <Modal
         visible={showSuccessModal}

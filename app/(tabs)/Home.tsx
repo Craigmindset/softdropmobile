@@ -285,7 +285,11 @@ const Home = () => {
           </View>
         </View>
       </Modal>
-      <StatusBar style="light" backgroundColor={HEADER_BG} translucent={true} />
+      <StatusBar
+        style="light"
+        backgroundColor={HEADER_BG}
+        translucent={false}
+      />
       <SafeAreaView style={{ flex: 1, backgroundColor: HEADER_BG }}>
         <View
           style={[
