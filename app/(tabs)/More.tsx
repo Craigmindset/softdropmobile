@@ -73,11 +73,11 @@ const More = () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      // Generate a short code from user_id (last 5 chars, uppercase, fallback to '00000')
-      const shortCode = user.id ? user.id.slice(-5).toUpperCase() : "00000";
+      // Generate a short code from user_id (first 5 chars, uppercase, fallback to '00000')
+      const shortCode = user.id ? user.id.slice(0, 5).toUpperCase() : "00000";
       setUserShortCode(shortCode);
       const { data } = await supabase
-        .from("sender_profile")
+        .from("carrier_profile")
         .select("profile_image_url, first_name")
         .eq("user_id", user.id)
         .single();
@@ -99,17 +99,7 @@ const More = () => {
   }, []);
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={["#0B4D1C"]}
-          tintColor="#0B4D1C"
-        />
-      }
-    >
+    <View style={{ flex: 1, backgroundColor: "#F6F6F6" }}>
       {/* User Header */}
       <View style={styles.header}>
         <Image
@@ -125,7 +115,6 @@ const More = () => {
             Hello,{" "}
             {firstName && firstName.trim().length > 0 ? firstName : "User"}
           </Text>
-
           <Text style={styles.userId}>
             User ID: {userShortCode ? userShortCode : "-----"}
           </Text>
@@ -134,39 +123,51 @@ const More = () => {
           <Ionicons name="qr-code" size={28} color="#fff" />
         </TouchableOpacity>
       </View>
-
-      {/* Menu List */}
-      <View style={styles.menuContainer}>
-        <Text style={styles.sectionTitle}>My Account</Text>
-
-        {menuItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.menuItem}
-            onPress={async () => {
-              if (item.label === "My Profile") {
-                router.push("/MoreTab/SenderProfile");
-              } else if (item.label === "Logout") {
-                await supabase.auth.signOut();
-                router.replace("/SenderLogin");
-              }
-              // Add more navigation logic for other menu items if needed
-            }}
-          >
-            <View style={styles.menuLeft}>
-              {item.icon}
-              <Text style={styles.menuText}>{item.label}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-        ))}
-
-        {/* Switch Button */}
-        <TouchableOpacity style={styles.switchButton}>
-          <Text style={styles.switchText}>Switch to Carrier</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      {/* Menu List Scrollable, now includes Switch Button */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#0B4D1C"]}
+            tintColor="#0B4D1C"
+          />
+        }
+      >
+        <View style={styles.menuContainer}>
+          <Text style={styles.sectionTitle}>My Account</Text>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.menuItem}
+              onPress={async () => {
+                if (item.label === "My Profile") {
+                  router.push("/MoreTab/SenderProfile");
+                } else if (item.label === "Logout") {
+                  await supabase.auth.signOut();
+                  router.replace("/CarrierLogin"); // Redirect to login page
+                }
+                // Add more navigation logic for other menu items if needed
+              }}
+            >
+              <View style={styles.menuLeft}>
+                {item.icon}
+                <Text style={styles.menuText}>{item.label}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#999" />
+            </TouchableOpacity>
+          ))}
+          {/* Switch Button now inside ScrollView */}
+          <View style={{ marginTop: 32, marginBottom: 68 }}>
+            <TouchableOpacity style={styles.switchButton}>
+              <Text style={styles.switchText}>Switch to Carrier</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
