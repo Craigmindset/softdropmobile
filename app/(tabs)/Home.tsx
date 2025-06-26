@@ -68,8 +68,8 @@ const Home = () => {
         } catch (e) {}
       }
       // Always fetch latest in background
-      // Generate a short code from user_id (last 5 chars, uppercase, fallback to '00000')
-      const shortCode = user.id ? user.id.slice(-5).toUpperCase() : "00000";
+      // Generate a short code from user_id (first 5 chars, uppercase, fallback to '00000')
+      const shortCode = user.id ? user.id.slice(0, 5).toUpperCase() : "00000";
       setUserShortCode(shortCode);
       const { data } = await supabase
         .from("sender_profile")

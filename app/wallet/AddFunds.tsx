@@ -14,7 +14,7 @@ export default function AddFunds() {
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor="#000" translucent={false} />
+      <StatusBar style="dark" backgroundColor="#fff" translucent={false} />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity

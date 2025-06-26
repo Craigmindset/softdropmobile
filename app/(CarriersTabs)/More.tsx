@@ -148,7 +148,7 @@ const More = () => {
                   router.push("/MoreTab/SenderProfile");
                 } else if (item.label === "Logout") {
                   await supabase.auth.signOut();
-                  router.replace("/CarrierLogin"); // Redirect to login page
+                  router.replace("/CarrierLogin"); // Use replace to reset stack after logout
                 }
                 // Add more navigation logic for other menu items if needed
               }}

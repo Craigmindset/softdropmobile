@@ -102,7 +102,7 @@ export default function CarriersTabs() {
           options={{
             title: "My Trip",
             tabBarIcon: ({ color }: { color: string }) => (
-              <MaterialIcons name="wallet" size={25} color={color} />
+              <MaterialIcons name="map" size={25} color={color} />
             ),
           }}
         />
@@ -112,7 +112,7 @@ export default function CarriersTabs() {
           options={{
             title: "Wallet",
             tabBarIcon: ({ color }: { color: string }) => (
-              <MaterialIcons name="history" size={25} color={color} />
+              <MaterialIcons name="wallet" size={25} color={color} />
             ),
           }}
         />

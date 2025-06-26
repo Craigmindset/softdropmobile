@@ -77,7 +77,7 @@ const More = () => {
       const shortCode = user.id ? user.id.slice(0, 5).toUpperCase() : "00000";
       setUserShortCode(shortCode);
       const { data } = await supabase
-        .from("carrier_profile")
+        .from("sender_profile")
         .select("profile_image_url, first_name")
         .eq("user_id", user.id)
         .single();
@@ -147,7 +147,7 @@ const More = () => {
                   router.push("/MoreTab/SenderProfile");
                 } else if (item.label === "Logout") {
                   await supabase.auth.signOut();
-                  router.replace("/CarrierLogin"); // Redirect to login page
+                  router.replace("/SenderLogin"); // Use replace to reset stack after logout
                 }
                 // Add more navigation logic for other menu items if needed
               }}
