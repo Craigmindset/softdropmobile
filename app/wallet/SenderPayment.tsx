@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: "500",
+    fontWeight: "medium",
     marginBottom: 6,
   },
 

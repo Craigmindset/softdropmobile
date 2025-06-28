@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "medium",
   },
   currency: {
     flexDirection: "row",
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "medium",
     marginBottom: 4,
   },
   optionSub: {

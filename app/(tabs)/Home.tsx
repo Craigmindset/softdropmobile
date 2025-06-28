@@ -420,7 +420,6 @@ const Home = () => {
                   </TouchableOpacity>
                 </View>
               </View>
-
               {/* Balance Section */}
               <View style={styles.balanceSection}>
                 <View style={styles.balanceBox}>
@@ -461,9 +460,11 @@ const Home = () => {
                   </View>
                 </View>
               </View>
-
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.actionBtn}>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => router.push("/SenderTransfer")}
+                >
                   <Text style={styles.actionText}>Transfer</Text>
                 </TouchableOpacity>
                 <TouchableOpacity

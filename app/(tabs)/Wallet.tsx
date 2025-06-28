@@ -479,7 +479,10 @@ const Wallet = () => {
               </View>
 
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.actionBtn}>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => router.push("/SenderTransfer")}
+                >
                   <Text style={styles.actionText}>Transfer</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
