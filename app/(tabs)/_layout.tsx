@@ -80,7 +80,7 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
-          name="Transaction"
+          name="Transactions"
           options={{
             title: "Transactions",
             tabBarIcon: ({ color }: { color: string }) => (

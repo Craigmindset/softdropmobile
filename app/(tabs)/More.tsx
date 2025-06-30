@@ -145,6 +145,8 @@ const More = () => {
               onPress={async () => {
                 if (item.label === "My Profile") {
                   router.push("/MoreTab/SenderProfile");
+                } else if (item.label === "Transaction History") {
+                  router.push("/(tabs)/Transactions");
                 } else if (item.label === "Logout") {
                   await supabase.auth.signOut();
                   router.replace("/SenderLogin"); // Use replace to reset stack after logout
