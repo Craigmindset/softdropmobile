@@ -1,4 +1,5 @@
 import { Entypo, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -148,8 +149,19 @@ const More = () => {
                 } else if (item.label === "Transaction History") {
                   router.push("/(tabs)/Transactions");
                 } else if (item.label === "Logout") {
-                  await supabase.auth.signOut();
-                  router.replace("/SenderLogin"); // Use replace to reset stack after logout
+                  try {
+                    await supabase.auth.signOut();
+                    await AsyncStorage.clear(); // Clear all local storage
+                  } catch (e) {
+                    // Optionally log or show error
+                  } finally {
+                    router.replace("/SenderLogin"); // Always redirect
+                    // Optionally force reload for a clean state
+                    setTimeout(() => {
+                      if (typeof window !== "undefined")
+                        window.location.reload();
+                    }, 300);
+                  }
                 }
                 // Add more navigation logic for other menu items if needed
               }}

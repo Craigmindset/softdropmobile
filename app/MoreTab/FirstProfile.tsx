@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 
-const SenderProfile = () => {
+const FirstProfile = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,6 +38,7 @@ const SenderProfile = () => {
     email: "",
   });
   const [refreshing, setRefreshing] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const router = useRouter();
 
   const firstNameRef = useRef<TextInput>(null);
@@ -75,6 +76,26 @@ const SenderProfile = () => {
       }
     }
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        // Only show this screen if profileUpdated flag is not set
+        const updatedFlag = await AsyncStorage.getItem(
+          `profileUpdated:${user.id}`
+        );
+        if (!updatedFlag) {
+          setShowProfile(true);
+        } else {
+          setShowProfile(false);
+          router.replace("/(tabs)/Home"); // Redirect if not a new user
+        }
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -192,30 +213,13 @@ const SenderProfile = () => {
     );
   }
 
+  if (!showProfile) {
+    return null;
+  }
+
   return (
     <>
       <StatusBar style="dark" />
-      <View
-        style={{
-          position: "absolute",
-          top: 44,
-          left: 20,
-          zIndex: 100,
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{
-            backgroundColor: "#fff",
-            borderRadius: 20,
-            padding: 8,
-            elevation: 2,
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0B4D1C" />
-        </TouchableOpacity>
-      </View>
       <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={
@@ -444,4 +448,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SenderProfile;
+export default FirstProfile;

@@ -5,7 +5,7 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import * as NavigationBar from "expo-navigation-bar";
@@ -43,8 +43,10 @@ const Home = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [welcomeChecked, setWelcomeChecked] = useState(false);
+  const [showProfileUpdate, setShowProfileUpdate] = useState(false);
   const backPressTimer = useRef<number | null>(null);
   const router = useRouter();
+  const navigation = useNavigation();
 
   useEffect(() => {
     NavigationBar.setBackgroundColorAsync(HEADER_BG); // Blend system nav bar with tab background
@@ -211,6 +213,59 @@ const Home = () => {
       }
     }
   };
+
+  useEffect(() => {
+    const checkProfileUpdate = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const updatedFlag = await AsyncStorage.getItem(
+          `profileUpdated:${user.id}`
+        );
+        if (!updatedFlag) {
+          setTimeout(() => {
+            setShowProfileUpdate(true);
+            router.push("/MoreTab/FirstProfile");
+          }, 3000);
+        }
+      }
+    };
+    checkProfileUpdate();
+  }, []);
+
+  // Block navigation if profile update is required
+  useEffect(() => {
+    if (!showProfileUpdate) return;
+    const beforeRemoveListener = navigation.addListener("beforeRemove", (e) => {
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+    });
+    return () => {
+      beforeRemoveListener();
+    };
+  }, [showProfileUpdate, navigation]);
+
+  // Listen for profile update completion (to be called from SenderProfile after update)
+  useEffect(() => {
+    const checkProfileCompletion = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const updatedFlag = await AsyncStorage.getItem(
+          `profileUpdated:${user.id}`
+        );
+        if (updatedFlag) {
+          setShowProfileUpdate(false);
+        }
+      }
+    };
+    if (showProfileUpdate) {
+      const interval = setInterval(checkProfileCompletion, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [showProfileUpdate]);
 
   return (
     <>
@@ -643,7 +698,7 @@ const Home = () => {
                     },
                   ]}
                 >
-                  <Entypo name="location-pin" size={20} color="orangered" />
+                  <Entypo name="wallet" size={20} color="orangered" />
                   <Text
                     style={{
                       letterSpacing: -0.5,

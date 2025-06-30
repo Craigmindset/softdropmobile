@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FlatList,
   Keyboard,
@@ -74,6 +75,22 @@ export default function SenderTransfer() {
   const [recipientName, setRecipientName] = useState("");
   const [bankModalVisible, setBankModalVisible] = useState(false);
   const [bankQuery, setBankQuery] = useState("");
+  const [showBack, setShowBack] = useState(false);
+  const [checkingVisit, setCheckingVisit] = useState(true);
+
+  // Check if it's the first visit
+  useEffect(() => {
+    (async () => {
+      const visited = await AsyncStorage.getItem("senderTransferVisited");
+      if (!visited) {
+        setShowBack(false);
+        await AsyncStorage.setItem("senderTransferVisited", "1");
+      } else {
+        setShowBack(true);
+      }
+      setCheckingVisit(false);
+    })();
+  }, []);
 
   // Filter banks for autocomplete
   const filteredBanks = banksList.filter((b) =>
@@ -253,6 +270,29 @@ export default function SenderTransfer() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Back Button (conditionally rendered) */}
+      {!checkingVisit && showBack && (
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 50,
+            left: 20,
+            zIndex: 100,
+            backgroundColor: "#fff",
+            borderRadius: 20,
+            padding: 8,
+            elevation: 2,
+          }}
+          activeOpacity={0.7}
+          onPress={() => {
+            // You can use navigation.goBack() or router.back() if using a router
+            // For now, just a placeholder
+          }}
+        >
+          <Ionicons name="arrow-back" size={24} color="#0B4D1C" />
+        </TouchableOpacity>
+      )}
     </>
   );
 }
@@ -334,7 +374,7 @@ const styles = StyleSheet.create({
   },
   recentTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "400",
     marginBottom: 10,
   },
   transferItem: {
@@ -346,7 +386,7 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   name: {
-    fontWeight: "500",
+    fontWeight: "400",
     fontSize: 15,
   },
   details: {

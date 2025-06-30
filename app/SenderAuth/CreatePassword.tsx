@@ -77,6 +77,7 @@ const CreatePassword = () => {
         phone: phoneNumber,
         password_set: true,
         updated_at: new Date().toISOString(),
+        display_name: "Sender",
       };
 
       console.log("[SenderProfile Upsert] Payload:", upsertPayload);
@@ -115,6 +116,11 @@ const CreatePassword = () => {
         alert("Profile not saved. No data returned from Supabase.");
         return;
       }
+
+      // Update display_name in authentication user metadata
+      await supabase.auth.updateUser({
+        data: { display_name: "Sender" },
+      });
 
       // 4. Show success message and navigate to sender login screen
       alert("Account created successfully");
